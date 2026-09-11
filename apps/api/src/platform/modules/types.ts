@@ -11,6 +11,7 @@ import type { JobDefinition, JobQueue } from '../jobs/Jobs.js';
 import type { Mailer } from '../mail/Mailer.js';
 import type { SequenceAllocator } from '../numbering/SequenceAllocator.js';
 import type { GlobalSearchRegistry, SearchProvider } from '../search/GlobalSearchRegistry.js';
+import type { ImportDefinition, ImportRegistry } from '../imports/ImportRegistry.js';
 import type { FileStorage } from '../storage/FileStorage.js';
 import type { PasswordHasher } from '../security/ScryptPasswordHasher.js';
 import type { TokenService } from '../security/JwtTokenService.js';
@@ -32,6 +33,7 @@ export interface ModuleContext {
   permissions: PermissionCatalog;
   jobs: JobQueue;
   search: GlobalSearchRegistry;
+  imports: ImportRegistry;
   requirePermission: RequirePermission;
   /** Acceso a la API pública de otro módulo. Resuélvelo dentro del caso de uso,
    *  nunca en `register()`: en `register()` aún puede no existir. */
@@ -58,6 +60,8 @@ export interface ModuleDefinition<Id extends string = string, TApi = unknown> {
   subscriptions?(ctx: ModuleContext, api: TApi): readonly EventSubscription[];
   jobs?(ctx: ModuleContext, api: TApi): readonly JobDefinition[];
   search?(ctx: ModuleContext, api: TApi): readonly SearchProvider[];
+  /** Entidades que este módulo sabe crear desde un CSV. */
+  imports?(ctx: ModuleContext, api: TApi): readonly ImportDefinition[];
   /** Se ejecuta una vez tras registrar todos los módulos. */
   onBoot?(ctx: ModuleContext, api: TApi): Promise<void>;
 }

@@ -24,7 +24,16 @@ const addressBody = z.object({
   isDefault: z.boolean().default(false),
 });
 
-const partyBody = z.object({
+/**
+ * Exportado para que la importación valide EXACTAMENTE igual que el formulario.
+ *
+ * Los casos de uso comprueban las reglas de negocio (dígito de verificación,
+ * duplicados), pero la forma de cada campo —que el correo sea un correo, que el
+ * teléfono no traiga 300 caracteres— la comprueba este esquema, y solo se
+ * ejecutaba en la ruta HTTP. Una importación que llamara al caso de uso sin
+ * pasar por aquí metería datos que la API habría rechazado.
+ */
+export const partyBody = z.object({
   kind: z.enum(['PERSON', 'COMPANY']).optional(),
   displayName: z.string().trim().min(1).max(200).optional(),
   legalName: z.string().trim().max(200).nullable().optional(),

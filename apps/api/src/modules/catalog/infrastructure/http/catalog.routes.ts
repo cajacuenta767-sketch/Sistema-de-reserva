@@ -29,7 +29,8 @@ const quantity = z.string().regex(/^\d+(\.\d{1,6})?$/, 'Cantidad inválida');
 const rate = z.string().regex(/^\d+(\.\d{1,6})?$/, 'Porcentaje inválido');
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Fecha inválida (AAAA-MM-DD)');
 
-const productBody = z.object({
+/** Exportado para que la importación valide igual que el formulario. Ver `partyBody`. */
+export const productBody = z.object({
   sku: z.string().trim().max(60).nullable().optional(),
   barcode: z.string().trim().max(60).nullable().optional(),
   name: z.string().trim().min(1).max(200),

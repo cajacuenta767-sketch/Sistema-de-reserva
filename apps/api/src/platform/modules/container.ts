@@ -10,6 +10,7 @@ import { InMemoryJobQueue, type JobQueue } from '../jobs/Jobs.js';
 import { ConsoleMailer, type Mailer } from '../mail/Mailer.js';
 import { SequenceAllocator } from '../numbering/SequenceAllocator.js';
 import { GlobalSearchRegistry } from '../search/GlobalSearchRegistry.js';
+import { ImportRegistry } from '../imports/ImportRegistry.js';
 import { LocalDiskStorage, type FileStorage } from '../storage/FileStorage.js';
 import { JwtTokenService } from '../security/JwtTokenService.js';
 import { ScryptPasswordHasher } from '../security/ScryptPasswordHasher.js';
@@ -66,6 +67,7 @@ export const buildContainer = (
   const permissions = new PermissionCatalog();
   const events = new EventBus(logger, clock);
   const search = new GlobalSearchRegistry();
+  const imports = new ImportRegistry();
   const jobs = overrides.jobs ?? new InMemoryJobQueue(logger);
   const mailer = overrides.mailer ?? new ConsoleMailer(logger, clock);
   const storage = overrides.storage ?? new LocalDiskStorage(env.STORAGE_LOCAL_PATH);
@@ -91,6 +93,7 @@ export const buildContainer = (
     permissions,
     jobs,
     search,
+    imports,
     requirePermission: createRequirePermission(permissions),
     module: <T>(id: string): T => registry.get<T>(id),
   };

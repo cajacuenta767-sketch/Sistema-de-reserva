@@ -114,6 +114,8 @@ describe('resolveTemplate', () => {
       'timesheets:entry:read',
       'helpdesk:ticket:read',
       'calendar:event:read',
+      'platform:import:read',
+      'platform:import:create',
     ];
     for (const template of SYSTEM_ROLE_TEMPLATES) {
       for (const grant of template.grants) {

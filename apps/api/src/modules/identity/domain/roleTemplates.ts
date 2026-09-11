@@ -100,6 +100,10 @@ export const SYSTEM_ROLE_TEMPLATES: readonly RoleTemplate[] = [
       { pattern: 'crm:*', scope: 'TEAM' },
       { pattern: 'sales:*', scope: 'OWN' },
       { pattern: 'catalog:*:read', scope: 'ORG' },
+      // Traer la propia cartera de clientes desde un fichero es trabajo normal
+      // de un comercial. No amplía lo que puede crear: importar exige además el
+      // permiso de la entidad, así que seguirá sin poder dar de alta productos.
+      { pattern: 'platform:import:*', scope: 'ORG' },
       { pattern: 'org:organization:read', scope: 'ORG' },
       { pattern: 'org:branch:read', scope: 'ORG' },
     ],

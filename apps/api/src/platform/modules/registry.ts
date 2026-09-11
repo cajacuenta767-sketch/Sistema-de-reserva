@@ -144,6 +144,7 @@ export class ModuleRegistry {
       if (def.subscriptions) ctx.events.subscribe(def.subscriptions(ctx, api));
       if (def.jobs) ctx.jobs.register(def.jobs(ctx, api));
       if (def.search) ctx.search.register(def.search(ctx, api));
+      if (def.imports) ctx.imports.register(def.imports(ctx, api));
     }
   }
 

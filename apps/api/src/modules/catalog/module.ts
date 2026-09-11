@@ -15,7 +15,7 @@ import {
   PgUomRepository,
 } from './infrastructure/persistence/PgCatalogRepositories.js';
 import { PgPriceListRepository } from './infrastructure/persistence/PgPriceListRepository.js';
-import { catalogRoutes } from './infrastructure/http/catalog.routes.js';
+import { catalogRoutes, productBody } from './infrastructure/http/catalog.routes.js';
 import { DEFAULT_CATEGORIES } from './domain/ColombianTaxes.js';
 import { newId } from '@erp/core';
 import type { Tx } from '../../platform/db/unitOfWork.js';
@@ -132,6 +132,41 @@ export const catalogModule = defineModule<'catalog', CatalogApi>({
   },
 
   routes: catalogRoutes,
+
+  /** Importación de productos y servicios, por el mismo caso de uso que el alta manual. */
+  imports(_ctx, api) {
+    return [
+      {
+        entityType: 'product',
+        label: 'Productos y servicios',
+        permission: 'catalog:product:create',
+        fields: [
+          { key: 'name', label: 'Nombre', required: true, aliases: ['nombre', 'producto', 'descripcion corta', 'articulo'] },
+          { key: 'sku', label: 'Código', aliases: ['sku', 'codigo', 'referencia', 'ref'] },
+          { key: 'barcode', label: 'Código de barras', aliases: ['codigo de barras', 'ean', 'barras'] },
+          { key: 'description', label: 'Descripción', aliases: ['descripcion', 'detalle'] },
+          { key: 'kind', label: 'Tipo', aliases: ['tipo'], hint: 'GOOD (bien), SERVICE (servicio) o KIT' },
+          { key: 'uomCode', label: 'Unidad', aliases: ['unidad', 'unidad de medida', 'um'], hint: 'Código: UND, KG, L, HORA…' },
+          { key: 'salePrice', label: 'Precio de venta', type: 'number', aliases: ['precio', 'precio venta', 'pvp', 'valor'] },
+          { key: 'purchasePrice', label: 'Precio de compra', type: 'number', aliases: ['costo', 'precio compra', 'coste'] },
+          { key: 'brand', label: 'Marca', aliases: ['marca'] },
+          { key: 'manufacturerSku', label: 'Referencia del fabricante', aliases: ['ref fabricante', 'codigo fabricante'] },
+          { key: 'minStock', label: 'Existencias mínimas', type: 'number', aliases: ['stock minimo', 'minimo'] },
+          { key: 'weightKg', label: 'Peso (kg)', type: 'number', aliases: ['peso', 'peso kg'] },
+          { key: 'isActive', label: 'Activo', type: 'boolean', aliases: ['activo', 'estado'] },
+        ],
+        async createOne(tx, requestContext, row) {
+          const input = productBody.parse({
+            ...row,
+            name: row.name ?? '',
+            ...(row.isActive === undefined ? {} : { isActive: row.isActive === 'true' }),
+          });
+          const product = await api.products.create(requestContext, tx, input);
+          return { id: product.id, label: `${product.sku} · ${product.name}` };
+        },
+      },
+    ];
+  },
 
   /**
    * El catálogo se siembra al crear la organización, en la MISMA transacción.
