@@ -8,6 +8,7 @@ import type {
   Invoice,
   InvoiceBreakdown,
   InvoiceRepository,
+  InvoiceStockLine,
   InvoiceRow,
   LineRepository,
   SalesOverview,
@@ -292,6 +293,21 @@ export class PgInvoiceRepository implements InvoiceRepository {
       consumptionTax: r?.consumption_tax ?? '0',
       otherTax: r?.other_tax ?? '0',
     };
+  }
+
+  async stockLines(tx: Tx, invoiceId: string): Promise<InvoiceStockLine[]> {
+    const { rows } = await tx.client.query<{ product_id: string; quantity: string }>(
+      // Agrupadas por producto: una factura puede repetir el mismo producto en
+      // dos líneas, y descontarlo dos veces por separado deja dos movimientos
+      // donde el kardex debería mostrar uno.
+      `SELECT l.product_id, trim_scale(sum(l.quantity))::text AS quantity
+         FROM document_lines l
+         JOIN products p ON p.id = l.product_id
+        WHERE l.invoice_id = $1 AND p.track_inventory AND p.deleted_at IS NULL
+        GROUP BY l.product_id`,
+      [invoiceId],
+    );
+    return rows.map((r) => ({ productId: r.product_id, quantity: r.quantity }));
   }
 
   async aging(tx: Tx, organizationId: string, today: string, scope: ScopeFilter): Promise<AgingRow[]> {

@@ -300,6 +300,7 @@ export class InvoiceUseCases {
      * que salió no es un contrato: es un aviso de que algo pasó.
      */
     const breakdown = await this.invoices.accountingBreakdown(tx, id);
+    const stockLines = await this.invoices.stockLines(tx, id);
     const withheld = await this.withholdings.listFor(tx, id);
     const byKind = (kind: string): string =>
       withheld
@@ -332,6 +333,9 @@ export class InvoiceUseCases {
         withholdingVat: byKind('WITHHOLDING_VAT'),
         withholdingIca: byKind('WITHHOLDING_ICA'),
         branchId: invoice.branchId,
+        // Lo que el inventario tiene que descontar. Va en el evento para que el
+        // suscriptor no tenga que volver a leer las líneas de esta factura.
+        stockLines,
       },
       actorMembershipId: ctx.membershipId,
     });

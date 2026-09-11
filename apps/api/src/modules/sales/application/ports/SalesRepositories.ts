@@ -161,6 +161,15 @@ export interface InvoiceRepository {
    * y la declaración de IVA sale mal sin que nada parezca roto.
    */
   accountingBreakdown(tx: Tx, invoiceId: string): Promise<InvoiceBreakdown>;
+  /**
+   * Líneas que mueven inventario, para que el módulo que lo lleva las descuente.
+   *
+   * Se resuelve AQUÍ y no allí porque quien tiene delante las líneas de la
+   * factura es este repositorio. El evento lleva el resultado: un suscriptor que
+   * tuviera que volver a consultar las líneas de la factura estaría leyendo el
+   * agregado de otro módulo, que es justo lo que los eventos evitan.
+   */
+  stockLines(tx: Tx, invoiceId: string): Promise<InvoiceStockLine[]>;
   aging(tx: Tx, organizationId: string, today: string, scope: ScopeFilter): Promise<AgingRow[]>;
   overview(tx: Tx, organizationId: string, today: string, scope: ScopeFilter): Promise<SalesOverview>;
 }
@@ -208,6 +217,11 @@ export interface InvoiceBreakdown {
   vat: string;
   consumptionTax: string;
   otherTax: string;
+}
+
+export interface InvoiceStockLine {
+  productId: string;
+  quantity: string;
 }
 
 export interface WithholdingRepository {

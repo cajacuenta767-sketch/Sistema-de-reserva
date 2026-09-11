@@ -15,6 +15,18 @@ import { AppError, Decimal, Money } from '@erp/core';
 
 /** Escala de las cantidades en la base: `numeric(19,6)`. */
 export const QTY_DECIMALS = 6;
+
+/**
+ * Cantidad tal como se PRESENTA: sin ceros de relleno.
+ *
+ * Una cantidad no es dinero. Diez unidades son "10", no "10.000000", y la
+ * escala de la columna es un detalle de almacenamiento que no tiene por qué
+ * asomar. Existe esta función —y no un `toFixed` suelto en cada sitio— porque
+ * el kardex ya devolvía `10` (por `trim_scale` en SQL) mientras el movimiento
+ * recién creado devolvía `10.000000`: el mismo número en dos formatos según el
+ * endpoint por el que se preguntara.
+ */
+export const presentQuantity = (value: Decimal): string => value.toFixed();
 /** Escala del dinero: `numeric(19,4)`. */
 export const COST_DECIMALS = 4;
 

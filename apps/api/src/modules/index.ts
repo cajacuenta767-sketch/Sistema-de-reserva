@@ -3,6 +3,7 @@ import { catalogModule } from './catalog/module.js';
 import { crmModule } from './crm/module.js';
 import { identityModule } from './identity/module.js';
 import { importsModule } from './imports/module.js';
+import { inventoryModule } from './inventory/module.js';
 import { organizationModule } from './organization/module.js';
 import { salesModule } from './sales/module.js';
 
@@ -19,6 +20,7 @@ export const modules = [
   catalogModule,
   salesModule,
   accountingModule,
+  inventoryModule,
   importsModule,
 ] as const;
 
