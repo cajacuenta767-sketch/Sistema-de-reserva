@@ -1,7 +1,22 @@
 node_modules/
 dist/
-*.log
+build/
+.turbo/
+*.tsbuildinfo
+coverage/
 .env
-.DS_Store
-backend/data/*.db
-backend/data/*.db-*
+.env.local
+.env.*.local
+
+# Directorios de datos en ejecución, ANCLADOS a su ruta.
+#
+# `storage/` a secas casaba con CUALQUIER carpeta llamada así a cualquier
+# profundidad, incluida `apps/api/src/platform/storage/`, que es código fuente:
+# `FileStorage.ts` nunca llegó al repositorio y CI llevaba desde la Fase 0 en
+# rojo con un "Cannot find module" que en local no se reproducía, porque en local
+# el fichero sí está. Una regla de ignorados sin anclar borra cosas en silencio.
+/apps/api/storage/
+/tmp/
+playwright-report/
+test-results/
+.pgdata/

@@ -1,0 +1,136 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Tokens semánticos — la disciplina que hace funcionar el modo oscuro
+   ═══════════════════════════════════════════════════════════════════════════
+
+   Regla inviolable, verificada por lint: ningún componente escribe un color
+   crudo (`bg-white`, `text-slate-900`, `border-gray-200`). Solo estos nombres.
+   Basta con que un componente use un color literal para que el modo oscuro deje
+   de funcionar ahí, y eso no se detecta mirando la pantalla en claro.
+
+   Los fondos llevan una pizca del matiz de marca: un gris absolutamente neutro
+   junto a un acento saturado se percibe sucio.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Superficies */
+  --color-canvas: oklch(0.981 0.004 var(--brand-h)); /* fondo de la aplicación */
+  --color-surface: oklch(1 0 0); /* tarjetas, tablas, menús */
+  --color-surface-2: oklch(0.968 0.005 var(--brand-h)); /* cabeceras, filas alternas */
+  --color-surface-3: oklch(0.941 0.007 var(--brand-h)); /* hover, seleccionado */
+  --color-overlay: oklch(0.21 0.02 var(--brand-h) / 0.45); /* velo de los diálogos */
+
+  /* Bordes */
+  --color-border: oklch(0.906 0.008 var(--brand-h));
+  --color-border-strong: oklch(0.83 0.012 var(--brand-h));
+
+  /* Texto */
+  --color-fg: oklch(0.235 0.02 var(--brand-h));
+  --color-fg-muted: oklch(0.545 0.016 var(--brand-h));
+  --color-fg-subtle: oklch(0.66 0.012 var(--brand-h));
+  --color-fg-on-accent: oklch(0.99 0 0);
+
+  /* Acento */
+  --color-accent: var(--brand-600);
+  --color-accent-hover: var(--brand-700);
+  --color-accent-soft: var(--brand-50);
+  --color-accent-soft-fg: var(--brand-700);
+  --color-ring: oklch(0.546 var(--brand-c) var(--brand-h) / 0.45);
+
+  /* Estados. Matices fijos: el verde de "pagado" debe seguir siendo verde
+     aunque la marca cambie de color. */
+  --color-success: oklch(0.58 0.14 152);
+  --color-success-soft: oklch(0.95 0.04 152);
+  --color-success-fg: oklch(0.42 0.12 152);
+
+  --color-warning: oklch(0.75 0.15 75);
+  --color-warning-soft: oklch(0.96 0.06 75);
+  --color-warning-fg: oklch(0.48 0.12 75);
+
+  --color-danger: oklch(0.58 0.2 27);
+  --color-danger-soft: oklch(0.95 0.04 27);
+  --color-danger-fg: oklch(0.47 0.18 27);
+
+  --color-info: oklch(0.6 0.14 235);
+  --color-info-soft: oklch(0.95 0.04 235);
+  --color-info-fg: oklch(0.45 0.13 235);
+
+  --color-neutral: oklch(0.62 0.01 var(--brand-h));
+  --color-neutral-soft: oklch(0.945 0.005 var(--brand-h));
+  --color-neutral-fg: oklch(0.45 0.01 var(--brand-h));
+
+  /* Sombras. En claro son grises frías; en oscuro casi desaparecen porque la
+     elevación se comunica con el color de la superficie, no con la sombra. */
+  --shadow-sm: 0 1px 2px oklch(0.23 0.02 var(--brand-h) / 0.06);
+  --shadow-md:
+    0 1px 3px oklch(0.23 0.02 var(--brand-h) / 0.08), 0 4px 12px -4px oklch(0.23 0.02 var(--brand-h) / 0.1);
+  --shadow-lg:
+    0 2px 4px oklch(0.23 0.02 var(--brand-h) / 0.06), 0 12px 32px -8px oklch(0.23 0.02 var(--brand-h) / 0.18);
+
+  /* Paleta de datos: 8 categóricos por rotación de matiz desde la marca, con la
+     luminancia fija para que ninguna serie domine visualmente a las demás. */
+  --color-data-1: oklch(0.62 0.19 var(--brand-h));
+  --color-data-2: oklch(0.62 0.19 calc(var(--brand-h) + 43));
+  --color-data-3: oklch(0.62 0.19 calc(var(--brand-h) + 86));
+  --color-data-4: oklch(0.62 0.19 calc(var(--brand-h) + 129));
+  --color-data-5: oklch(0.62 0.19 calc(var(--brand-h) + 172));
+  --color-data-6: oklch(0.62 0.19 calc(var(--brand-h) + 215));
+  --color-data-7: oklch(0.62 0.19 calc(var(--brand-h) + 258));
+  --color-data-8: oklch(0.62 0.19 calc(var(--brand-h) + 301));
+}
+
+.dark {
+  --color-canvas: oklch(0.178 0.014 var(--brand-h));
+  --color-surface: oklch(0.216 0.016 var(--brand-h));
+  --color-surface-2: oklch(0.252 0.018 var(--brand-h));
+  --color-surface-3: oklch(0.295 0.02 var(--brand-h));
+  --color-overlay: oklch(0.12 0.02 var(--brand-h) / 0.65);
+
+  --color-border: oklch(0.318 0.018 var(--brand-h));
+  --color-border-strong: oklch(0.42 0.022 var(--brand-h));
+
+  --color-fg: oklch(0.955 0.006 var(--brand-h));
+  --color-fg-muted: oklch(0.715 0.014 var(--brand-h));
+  --color-fg-subtle: oklch(0.585 0.014 var(--brand-h));
+  --color-fg-on-accent: oklch(0.16 0.02 var(--brand-h));
+
+  /* El acento se ACLARA en oscuro: el mismo azul que contrasta sobre blanco
+     queda ilegible sobre carbón. */
+  --color-accent: var(--brand-400);
+  --color-accent-hover: var(--brand-300);
+  --color-accent-soft: oklch(0.3 0.06 var(--brand-h));
+  --color-accent-soft-fg: var(--brand-200);
+  --color-ring: oklch(0.707 0.165 var(--brand-h) / 0.5);
+
+  --color-success: oklch(0.72 0.16 152);
+  --color-success-soft: oklch(0.3 0.06 152);
+  --color-success-fg: oklch(0.82 0.14 152);
+
+  --color-warning: oklch(0.82 0.15 75);
+  --color-warning-soft: oklch(0.32 0.06 75);
+  --color-warning-fg: oklch(0.88 0.13 75);
+
+  --color-danger: oklch(0.68 0.19 27);
+  --color-danger-soft: oklch(0.31 0.08 27);
+  --color-danger-fg: oklch(0.82 0.15 27);
+
+  --color-info: oklch(0.72 0.14 235);
+  --color-info-soft: oklch(0.3 0.06 235);
+  --color-info-fg: oklch(0.84 0.12 235);
+
+  --color-neutral: oklch(0.68 0.012 var(--brand-h));
+  --color-neutral-soft: oklch(0.3 0.012 var(--brand-h));
+  --color-neutral-fg: oklch(0.8 0.012 var(--brand-h));
+
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
+  --shadow-md: 0 1px 3px oklch(0 0 0 / 0.4), 0 4px 12px -4px oklch(0 0 0 / 0.45);
+  --shadow-lg: 0 2px 4px oklch(0 0 0 / 0.35), 0 12px 32px -8px oklch(0 0 0 / 0.55);
+
+  --color-data-1: oklch(0.72 0.17 var(--brand-h));
+  --color-data-2: oklch(0.72 0.17 calc(var(--brand-h) + 43));
+  --color-data-3: oklch(0.72 0.17 calc(var(--brand-h) + 86));
+  --color-data-4: oklch(0.72 0.17 calc(var(--brand-h) + 129));
+  --color-data-5: oklch(0.72 0.17 calc(var(--brand-h) + 172));
+  --color-data-6: oklch(0.72 0.17 calc(var(--brand-h) + 215));
+  --color-data-7: oklch(0.72 0.17 calc(var(--brand-h) + 258));
+  --color-data-8: oklch(0.72 0.17 calc(var(--brand-h) + 301));
+}

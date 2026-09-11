@@ -1,0 +1,34 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Marca — toda la identidad visual sale de UN número
+   ═══════════════════════════════════════════════════════════════════════════
+
+   La escala se deriva en OKLCH de un solo matiz. OKLCH es lo que hace que esto
+   funcione: su luminancia es perceptualmente uniforme, así que la rampa mantiene
+   el mismo contraste sea cual sea el matiz. Con HSL, pasar de azul a amarillo
+   destrozaría la legibilidad del texto sobre los mismos fondos.
+
+   `--brand-600` con estos valores es EXACTAMENTE #2563EB.
+
+   Bonus: `organizations.brand_hue` ya existe en la base de datos. Inyectando
+   `:root { --brand-h: NNN }` según la organización activa se obtiene marca
+   blanca por cliente sin recompilar nada.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  --brand-h: 262.9; /* ◄◄◄ EL ÚNICO VALOR A CAMBIAR (0–360) */
+  --brand-c: 0.245; /* croma; bajarlo da una marca más sobria */
+
+  /* Luminancia y croma por escalón. El croma se expresa como fracción del
+     croma base para que la rampa siga siendo armónica con cualquier matiz. */
+  --brand-50: oklch(0.97 calc(var(--brand-c) * 0.057) var(--brand-h));
+  --brand-100: oklch(0.932 calc(var(--brand-c) * 0.131) var(--brand-h));
+  --brand-200: oklch(0.882 calc(var(--brand-c) * 0.241) var(--brand-h));
+  --brand-300: oklch(0.809 calc(var(--brand-c) * 0.429) var(--brand-h));
+  --brand-400: oklch(0.707 calc(var(--brand-c) * 0.673) var(--brand-h));
+  --brand-500: oklch(0.623 calc(var(--brand-c) * 0.873) var(--brand-h));
+  --brand-600: oklch(0.546 var(--brand-c) var(--brand-h));
+  --brand-700: oklch(0.488 calc(var(--brand-c) * 0.992) var(--brand-h));
+  --brand-800: oklch(0.424 calc(var(--brand-c) * 0.812) var(--brand-h));
+  --brand-900: oklch(0.379 calc(var(--brand-c) * 0.596) var(--brand-h));
+  --brand-950: oklch(0.282 calc(var(--brand-c) * 0.371) var(--brand-h));
+}

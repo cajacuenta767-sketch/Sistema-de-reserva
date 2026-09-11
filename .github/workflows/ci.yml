@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # El rol de aplicación NO es dueño de las tablas: es lo que hace que las
+  # políticas RLS se le apliquen de verdad, igual que en producción.
+  DATABASE_URL: postgres://erp_app:erp_app@127.0.0.1:5432/erp_ci
+  DATABASE_MIGRATION_URL: postgres://erp_migrator:erp_migrator@127.0.0.1:5432/erp_ci
+  JWT_ACCESS_SECRET: ci-secreto-de-acceso-suficientemente-largo
+  JWT_REFRESH_SECRET: ci-secreto-de-refresco-suficientemente-largo
+
+jobs:
+  verificar:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: erp_migrator
+          POSTGRES_PASSWORD: erp_migrator
+          POSTGRES_DB: erp_ci
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U erp_migrator"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Ningún fichero fuente fuera del repositorio
+        # Antes que nada: si falta código, el resto de pasos fallan con errores
+        # que no apuntan a la causa.
+        run: ./scripts/check-tracked.sh
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Crear el rol de aplicación
+        run: |
+          PGPASSWORD=erp_migrator psql -h 127.0.0.1 -U erp_migrator -d erp_ci -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE erp_app LOGIN PASSWORD 'erp_app' NOBYPASSRLS;
+          SQL
+
+      - run: pnpm build
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      - name: Las migraciones se aplican sobre una base vacía
+        run: |
+          PGPASSWORD=erp_migrator createdb -h 127.0.0.1 -U erp_migrator erp_migrate_check
+          DATABASE_MIGRATION_URL=postgres://erp_migrator:erp_migrator@127.0.0.1:5432/erp_migrate_check \
+          DATABASE_URL=postgres://erp_app:erp_app@127.0.0.1:5432/erp_migrate_check \
+            pnpm -F @erp/api exec tsx src/platform/db/migrate.cli.ts
