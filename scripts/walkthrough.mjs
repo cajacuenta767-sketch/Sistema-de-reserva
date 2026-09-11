@@ -210,6 +210,79 @@ for (const [name, path] of [
   await shot(name);
 }
 
+// ── Contabilidad ────────────────────────────────────────────────────────────
+//
+// Lo que se comprueba aquí no es que las pantallas pinten: es que la factura
+// que se acaba de emitir YA generó su asiento, que ese asiento cuadra y que
+// desde él se vuelve a la factura. Una contabilidad que solo se ve bien en una
+// captura no sirve para nada.
+
+console.log('3. Contabilidad');
+await page.goto(`${WEB}/contabilidad/diario`, { waitUntil: 'networkidle' });
+await shot('41-libro-diario');
+
+const diario = await page.textContent('body');
+for (const esperado of ['VT-', 'Contabilizado', 'Factura de venta']) {
+  if (!diario.includes(esperado)) {
+    throw new Error(`el libro diario no muestra ${esperado}: la factura no se contabilizó`);
+  }
+}
+// Ningún enumerado en crudo: el usuario no lee "POSTED" ni "SALES".
+for (const crudo of ['POSTED', 'DRAFT', 'sales_invoice']) {
+  if (diario.includes(crudo)) throw new Error(`el libro diario muestra el enumerado crudo ${crudo}`);
+}
+
+console.log('→ asiento de la factura');
+await page.click('tbody tr:has-text("Factura de venta")');
+await page.waitForURL(/\/contabilidad\/asientos\/[0-9a-f-]{36}$/, { timeout: 15000 });
+await shot('42-asiento');
+
+const asiento = await page.textContent('body');
+// 45.000 de ingreso, 8.550 de IVA, 53.550 a cartera. Sumas iguales.
+for (const esperado of ['Sumas iguales', '53.550', '45.000', '8.550', 'Clientes nacionales', 'IVA generado']) {
+  if (!asiento.includes(esperado)) throw new Error(`el asiento no muestra ${esperado}`);
+}
+
+console.log('→ drill-down hasta la factura');
+await page.click('a:has-text("Factura de venta")');
+await page.waitForURL(/\/facturas\/[0-9a-f-]{36}$/, { timeout: 15000 });
+const vuelta = await page.textContent('body');
+if (!/FV-\d{6}/.test(vuelta)) throw new Error('el enlace del asiento no lleva a la factura');
+
+for (const [name, path] of [
+  ['43-balance-de-prueba', '/contabilidad/balance-de-prueba'],
+  ['44-estado-de-resultados', '/contabilidad/estado-de-resultados'],
+  ['45-balance-general', '/contabilidad/balance-general'],
+  ['46-plan-de-cuentas', '/contabilidad/plan-de-cuentas'],
+  ['47-periodos', '/contabilidad/periodos'],
+  ['48-cuentas-por-operacion', '/contabilidad/cuentas-por-operacion'],
+  ['49-asiento-manual', '/contabilidad/asientos/nuevo'],
+]) {
+  console.log(`→ ${path}`);
+  await page.goto(`${WEB}${path}`, { waitUntil: 'networkidle' });
+  await shot(name);
+}
+
+console.log('→ los informes cuadran');
+await page.goto(`${WEB}/contabilidad/balance-de-prueba`, { waitUntil: 'networkidle' });
+// Se espera al resultado, no al fin de la red: el informe lo pinta React cuando
+// la consulta resuelve, y `networkidle` puede llegar antes.
+await page.waitForSelector('text=Comprobación', { timeout: 15000 });
+const balance = await page.textContent('body');
+if (balance.includes('No cuadra')) throw new Error('el balance de prueba NO cuadra');
+if (!balance.includes('Cuadra')) throw new Error('el balance de prueba no dice si cuadra');
+// Las agrupaciones tienen que llevar su nombre, no repetir el código.
+for (const esperado of ['Activo', 'Disponible', 'Clientes', 'Ingresos']) {
+  if (!balance.includes(esperado)) {
+    throw new Error(`el balance no nombra la agrupación «${esperado}»: muestra solo el código`);
+  }
+}
+
+await page.goto(`${WEB}/contabilidad/balance-general`, { waitUntil: 'networkidle' });
+await page.waitForSelector('text=Ecuación contable', { timeout: 15000 });
+const general = await page.textContent('body');
+if (general.includes('no se cumple')) throw new Error('la ecuación contable no se cumple');
+
 console.log('→ paleta de comandos');
 await page.keyboard.press('Control+k');
 await shot('25-paleta');
@@ -223,16 +296,55 @@ await page.goto(`${WEB}/clientes`, { waitUntil: 'networkidle' });
 await shot('27-oscuro-clientes');
 await page.goto(`${WEB}/facturas`, { waitUntil: 'networkidle' });
 await shot('39-oscuro-facturas');
+await page.goto(`${WEB}/contabilidad/balance-de-prueba`, { waitUntil: 'networkidle' });
+await shot('50-oscuro-balance');
+await page.goto(`${WEB}/contabilidad/plan-de-cuentas`, { waitUntil: 'networkidle' });
+await shot('51-oscuro-plan-de-cuentas');
 
 console.log('→ móvil 400px');
 await page.setViewportSize({ width: 400, height: 780 });
 await page.evaluate(() => localStorage.setItem('erp.theme', 'light'));
+
+/**
+ * Ninguna pantalla puede desbordarse a lo ancho.
+ *
+ * Una tabla ancha va dentro de su propio contenedor con scroll; lo que no vale
+ * es que el CUERPO de la página se desplace, porque entonces la cabecera y los
+ * botones quedan fuera de la pantalla y no hay forma de llegar a ellos.
+ */
+const assertNoOverflow = async (path) => {
+  await page.goto(`${WEB}${path}`, { waitUntil: 'networkidle' });
+  await page.waitForTimeout(400);
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  if (overflow > 1) throw new Error(`${path} se desborda ${overflow}px a lo ancho en 400px`);
+};
 await page.goto(`${WEB}/productos`, { waitUntil: 'networkidle' });
 await shot('28-movil-productos');
 await page.goto(`${WEB}/clientes`, { waitUntil: 'networkidle' });
 await shot('29-movil-clientes');
 await page.goto(`${WEB}/facturas`, { waitUntil: 'networkidle' });
 await shot('40-movil-facturas');
+await page.goto(`${WEB}/contabilidad/diario`, { waitUntil: 'networkidle' });
+await shot('52-movil-diario');
+await page.goto(`${WEB}/contabilidad/balance-de-prueba`, { waitUntil: 'networkidle' });
+await shot('53-movil-balance');
+
+console.log('→ nada se desborda a lo ancho');
+for (const path of [
+  '/',
+  '/clientes',
+  '/facturas',
+  '/contabilidad/diario',
+  '/contabilidad/balance-de-prueba',
+  '/contabilidad/balance-general',
+  '/contabilidad/plan-de-cuentas',
+  '/contabilidad/periodos',
+  '/contabilidad/mayor',
+]) {
+  await assertNoOverflow(path);
+}
 
 console.log(errors.length ? `\n❌ ${errors.length} error(es) de consola:` : '\n✅ Sin errores de consola');
 errors.slice(0, 10).forEach((e) => console.log('   ', e.slice(0, 200)));

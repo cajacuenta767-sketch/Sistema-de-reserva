@@ -32,7 +32,16 @@ export interface TestApp {
   close(): Promise<void>;
 }
 
-export const makeTestApp = async (): Promise<TestApp> => {
+/**
+ * `overrides` ajusta la configuración de ESTA app.
+ *
+ * Lo usan los tests que necesitan un entorno distinto del normal —un límite de
+ * peticiones bajo, por ejemplo—. Cada app tiene su propio contador, así que un
+ * test que agote una cuota no envenena a los que corren después.
+ */
+export const makeTestApp = async (
+  overrides: Partial<NodeJS.ProcessEnv> = {},
+): Promise<TestApp> => {
   const database = await createTestDatabase();
 
   const env = loadEnv({
@@ -42,7 +51,11 @@ export const makeTestApp = async (): Promise<TestApp> => {
     JWT_ACCESS_SECRET: 'secreto-de-pruebas-suficientemente-largo',
     JWT_REFRESH_SECRET: 'otro-secreto-de-pruebas-suficientemente-largo',
     JOBS_ENABLED: 'false',
+    // Bajo a propósito: así los tests pueden comprobar qué endpoints consumen
+    // cuota. Los que necesiten más intentos crean su propia app.
+    AUTH_RATE_LIMIT: '200',
     LOG_LEVEL: 'silent',
+    ...overrides,
   });
 
   const clock = new FixedClock(NOW);

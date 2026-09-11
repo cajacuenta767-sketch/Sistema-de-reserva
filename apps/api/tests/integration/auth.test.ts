@@ -136,6 +136,39 @@ describe('sesión activa', () => {
     expect(Object.keys(response.body.permissions).length).toBeGreaterThan(20);
   });
 
+  /*
+   * Este test existe por un fallo real: `/auth/session` estaba bajo el límite
+   * de fuerza bruta, y como la web la pide en CADA carga de página, alguien que
+   * trabajara una mañana recargando pantallas agotaba la cuota y aparecía en el
+   * login con la sesión intacta. El síntoma era indistinguible de una sesión
+   * caducada, así que nunca se reportaba como el fallo que era.
+   */
+  it('leer la sesión no consume la cuota contra la prueba de contraseñas', async () => {
+    const cuenta = await registerOrganization(t);
+    // Muy por encima del límite configurado en los tests (200 por ventana).
+    for (let i = 0; i < 260; i += 1) {
+      const respuesta = await cuenta.as('get', '/api/v1/auth/session');
+      expect(respuesta.status, `la lectura ${i + 1} de la sesión falló`).toBe(200);
+    }
+  });
+
+  it('pero probar contraseñas sí la consume', async () => {
+    // App propia con un límite de tres: agotar la cuota compartida dejaría sin
+    // poder registrarse a los tests que corren después.
+    const estricta = await makeTestApp({ AUTH_RATE_LIMIT: '3' });
+    try {
+      const intento = () =>
+        estricta.api
+          .post('/api/v1/auth/login')
+          .send({ email: 'nadie@test.local', password: 'ContraseñaInventada1' });
+
+      for (let i = 0; i < 3; i += 1) expect((await intento()).status).toBe(401);
+      expect((await intento()).status).toBe(429);
+    } finally {
+      await estricta.close();
+    }
+  });
+
   it('sin token, los endpoints privados responden 401', async () => {
     await t.api.get('/api/v1/members').expect(401);
   });

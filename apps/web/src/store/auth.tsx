@@ -41,6 +41,25 @@ const SESSION_KEY = ['/auth/session'] as const;
  * cascada), y cualquier parte de la app puede invalidar la sesión —por ejemplo
  * tras cambiar los permisos de un rol— sin pasar por este contexto.
  */
+/**
+ * ¿Todavía no se sabe si hay sesión?
+ *
+ * Distingue "no hay sesión" de "no se pudo averiguar". Sin esa distinción, un
+ * fallo de red o un 429 dejan la sesión en `undefined`, el router lo lee como
+ * "no autenticado" y manda al login a alguien con sus credenciales intactas: lo
+ * que ve es indistinguible de una sesión caducada, así que ni siquiera lo
+ * reporta como fallo.
+ *
+ * Mientras haya tokens, un error al leer la sesión significa que sigue sin
+ * saberse. Cuando la sesión muere de verdad, el cliente HTTP borra los tokens y
+ * avisa; a partir de ahí `hasTokens` es falso y esto deja de retener.
+ */
+export const sessionIsResolving = (state: {
+  hasTokens: boolean;
+  isLoading: boolean;
+  isError: boolean;
+}): boolean => state.isLoading || (state.hasTokens && state.isError);
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
 
@@ -84,7 +103,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       session,
       permissions: session ? PermissionSet.fromJSON(session.permissions) : PermissionSet.empty(),
-      loading: query.isLoading,
+      loading: sessionIsResolving({
+        hasTokens: getTokens() !== null,
+        isLoading: query.isLoading,
+        isError: query.isError,
+      }),
       login: async (email, password) => {
         applyResult(await post<AuthResult>('/auth/login', { email, password }));
       },
@@ -109,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await queryClient.invalidateQueries({ queryKey: SESSION_KEY });
       },
     }),
-    [session, query.isLoading, applyResult, queryClient],
+    [session, query.isLoading, query.isError, applyResult, queryClient],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

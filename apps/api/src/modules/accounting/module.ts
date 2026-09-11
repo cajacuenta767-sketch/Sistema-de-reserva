@@ -123,7 +123,7 @@ export const accountingModule = defineModule<'accounting', AccountingApi>({
       periods,
       posting,
       entries: new EntryUseCases(entryRepo, accountRepo, posting, ctx.audit, ctx.clock),
-      reports: new ReportUseCases(reportRepo, ctx.clock),
+      reports: new ReportUseCases(reportRepo, accountRepo, ctx.clock),
 
       async seedForOrganization(tx: Tx, organizationId: string): Promise<void> {
         await chart.seedChart(tx, organizationId);

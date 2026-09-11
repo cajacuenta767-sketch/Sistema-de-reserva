@@ -7,11 +7,13 @@ import {
   buildTrialBalance,
   checkTrialBalance,
   incomeStatement,
+  type AccountNaming,
   type IncomeStatement,
   type LedgerRow,
   type TrialBalanceNode,
 } from '../../domain/Reports.js';
 import type {
+  AccountRepository,
   LedgerEntryRow,
   LedgerQuery,
   ReportRepository,
@@ -56,8 +58,25 @@ const LEDGER_LIMIT = 5000;
 export class ReportUseCases {
   constructor(
     private readonly reports: ReportRepository,
+    private readonly accounts: AccountRepository,
     private readonly clock: Clock,
   ) {}
+
+  /**
+   * Nombres del plan de cuentas, para las agrupaciones.
+   *
+   * Una consulta por informe, no una por nodo: el plan entero son cientos de
+   * filas y el árbol tiene tantos nodos como cuentas con movimiento.
+   */
+  private async naming(tx: Tx): Promise<Map<string, AccountNaming>> {
+    const accounts = await this.accounts.tree(tx, false);
+    return new Map(
+      accounts.map((a) => [
+        a.code,
+        { accountId: a.id, name: a.name, type: a.type, nature: a.nature },
+      ]),
+    );
+  }
 
   private range(from?: string, to?: string): ReportRange {
     const today = this.clock.now().toISOString().slice(0, 10);
@@ -94,7 +113,7 @@ export class ReportUseCases {
     const check = checkTrialBalance(leaves);
     return {
       ...range,
-      rows: buildTrialBalance(leaves),
+      rows: buildTrialBalance(leaves, await this.naming(tx)),
       totals: { debit: check.debit, credit: check.credit, balanced: check.balanced },
     };
   }
@@ -113,7 +132,11 @@ export class ReportUseCases {
       costCenterId: costCenterId ?? null,
     });
     const results = leaves.filter((l) => statementFor(l.type) === 'RESULTS');
-    return { ...range, ...incomeStatement(results), rows: buildTrialBalance(results) };
+    return {
+      ...range,
+      ...incomeStatement(results),
+      rows: buildTrialBalance(results, await this.naming(tx)),
+    };
   }
 
   /**
@@ -160,11 +183,12 @@ export class ReportUseCases {
     const equityTotal = closing(equity);
     const difference = assetTotal.minus(liabilityTotal).minus(equityTotal).minus(result);
 
+    const naming = await this.naming(tx);
     return {
       ...range,
-      assets: buildTrialBalance(assets),
-      liabilities: buildTrialBalance(liabilities),
-      equity: buildTrialBalance(equity),
+      assets: buildTrialBalance(assets, naming),
+      liabilities: buildTrialBalance(liabilities, naming),
+      equity: buildTrialBalance(equity, naming),
       totals: {
         assets: assetTotal.toFixed(4),
         liabilities: liabilityTotal.toFixed(4),

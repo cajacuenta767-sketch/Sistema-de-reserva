@@ -17,7 +17,14 @@ export function PageHeader({ title, description, actions, tabs, className }: Pag
           <h1 className="page-title">{title}</h1>
           {description && <p className="text-sm text-fg-muted">{description}</p>}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+        {/*
+          * Sin `shrink-0`: con él, una cabecera con varios controles —un
+          * selector de fechas y una casilla, por ejemplo— se niega a encogerse y
+          * se sale de la pantalla a 400 px en vez de repartirse en dos líneas.
+          * El `flex-wrap` de la fila exterior ya evita que las acciones aplasten
+          * al título: cuando no caben, bajan enteras.
+          */}
+        {actions && <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>
       {tabs}
     </div>

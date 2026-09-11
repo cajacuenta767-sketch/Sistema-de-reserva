@@ -29,6 +29,15 @@ const envSchema = z.object({
   MAIL_DRIVER: z.enum(['console', 'smtp']).default('console'),
   MAIL_FROM: z.string().default('Nexo ERP <no-reply@example.com>'),
 
+  /**
+   * Intentos de credenciales permitidos por IP cada 15 minutos.
+   *
+   * Configurable para que los tests puedan bajarlo y comprobar de verdad QUÉ
+   * endpoints consume. Con un límite de diez mil en tests, un test que afirme
+   * "leer la sesión no gasta cuota" pasa aunque la gaste.
+   */
+  AUTH_RATE_LIMIT: z.coerce.number().int().positive().default(30),
+
   /** Desactiva los trabajos en segundo plano (tests, procesos efímeros). */
   JOBS_ENABLED: z
     .enum(['true', 'false'])

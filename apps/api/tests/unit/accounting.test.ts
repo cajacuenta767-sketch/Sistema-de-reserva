@@ -597,6 +597,25 @@ describe('informes', () => {
     expect(checkTrialBalance(roto).balanced).toBe(false);
   });
 
+  it('las cuentas de agrupación llevan su nombre del plan de cuentas', () => {
+    // Sin el catálogo, el informe escribe el código donde va el nombre y sale
+    // un balance que dice «1105 1105» en vez de «1105 Caja».
+    const catalog = new Map([
+      ['1', { accountId: 'a1', name: 'Activo', type: 'ASSET' as const, nature: 'DEBIT' as const }],
+      ['11', { accountId: 'a2', name: 'Disponible', type: 'ASSET' as const, nature: 'DEBIT' as const }],
+    ]);
+    const tree = buildTrialBalance(movimientos, catalog);
+    expect(tree.find((n) => n.code === '1')?.name).toBe('Activo');
+    expect(tree.find((n) => n.code === '1')?.children[0]?.name).toBe('Disponible');
+    // Y las hojas siguen llevando el suyo, que viene de los saldos.
+    const caja = tree
+      .find((n) => n.code === '1')
+      ?.children.find((n) => n.code === '11')
+      ?.children.find((n) => n.code === '1105')
+      ?.children[0];
+    expect(caja?.name).toBe('Caja general');
+  });
+
   it('las cuentas de agrupación se calculan sumando sus hijas', () => {
     const tree = buildTrialBalance(movimientos);
     const activo = tree.find((n) => n.code === '1');

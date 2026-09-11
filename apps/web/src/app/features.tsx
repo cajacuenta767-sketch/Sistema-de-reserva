@@ -2,6 +2,7 @@ import { dashboardFeature } from '@/features/dashboard/feature';
 import { crmFeature } from '@/features/crm/feature';
 import { salesFeature } from '@/features/sales/feature';
 import { catalogFeature } from '@/features/catalog/feature';
+import { accountingFeature } from '@/features/accounting/feature';
 import { importsFeature } from '@/features/imports/feature';
 import { accessFeature } from '@/features/access/feature';
 import { settingsFeature } from '@/features/settings/feature';
@@ -19,6 +20,7 @@ export const features: FeatureModule[] = [
   crmFeature,
   salesFeature,
   catalogFeature,
+  accountingFeature,
   importsFeature,
   accessFeature,
   settingsFeature,

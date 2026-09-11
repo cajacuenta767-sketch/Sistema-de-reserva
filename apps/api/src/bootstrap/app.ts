@@ -43,17 +43,28 @@ export const createApp = (container: Container): Express => {
     res.json({ status: 'ok', modules: registry.ids(), permissions: container.permissions.size });
   });
 
-  // Límite estricto solo en autenticación: es donde se prueban contraseñas.
-  api.use(
-    '/auth',
-    rateLimit({
-      windowMs: 15 * 60 * 1000,
-      limit: env.NODE_ENV === 'test' ? 10_000 : 30,
-      standardHeaders: 'draft-7',
-      legacyHeaders: false,
-      message: { error: { code: 'RATE_LIMITED', message: 'Demasiados intentos. Espera unos minutos.' } },
-    }),
-  );
+  /*
+   * Límite contra la prueba de contraseñas.
+   *
+   * Se aplica a los endpoints donde se PRUEBAN credenciales, no a todo `/auth`.
+   * `/auth/session` es una lectura de la sesión en curso y la web la pide en
+   * cada carga de página: metida bajo el mismo límite, alguien que trabaje una
+   * mañana recargando pantallas agota la cuota y la aplicación lo manda al login
+   * con la sesión intacta. El error se parece tanto a "te caducó la sesión" que
+   * nadie lo reporta como el fallo que es.
+   *
+   * `/auth/logout` tampoco: impedir cerrar sesión no protege de nada.
+   */
+  const credentialLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: env.AUTH_RATE_LIMIT,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: { error: { code: 'RATE_LIMITED', message: 'Demasiados intentos. Espera unos minutos.' } },
+  });
+  for (const path of ['/auth/login', '/auth/register', '/auth/refresh', '/auth/switch-organization']) {
+    api.use(path, credentialLimiter);
+  }
 
   api.use(registry.buildRouter(ctx));
   app.use(API_PREFIX, api);

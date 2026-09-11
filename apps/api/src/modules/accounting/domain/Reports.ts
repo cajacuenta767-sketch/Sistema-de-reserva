@@ -23,6 +23,21 @@ export interface LedgerRow {
   credit: string;
 }
 
+/**
+ * Nombre y clasificación de una cuenta de agrupación.
+ *
+ * Las cuentas de agrupación NO aparecen en los saldos —no reciben movimiento—,
+ * así que su nombre tiene que venir del plan de cuentas. Sin esto el informe
+ * escribe el código donde debería ir el nombre y sale un balance que dice
+ * «1105 1105» en vez de «1105 Caja».
+ */
+export interface AccountNaming {
+  accountId: string;
+  name: string;
+  type: AccountType;
+  nature: AccountNature;
+}
+
 export interface TrialBalanceNode extends LedgerRow {
   level: number;
   isPostable: boolean;
@@ -48,6 +63,7 @@ const parentCode = (code: string, levels: readonly number[]): string | null => {
  */
 export const buildTrialBalance = (
   leaves: readonly LedgerRow[],
+  catalog: ReadonlyMap<string, AccountNaming> = new Map(),
   levels: readonly number[] = [1, 2, 4, 6, 8],
 ): TrialBalanceNode[] => {
   const byCode = new Map<string, TrialBalanceNode>();
@@ -55,12 +71,13 @@ export const buildTrialBalance = (
   const ensure = (code: string, seed?: LedgerRow): TrialBalanceNode => {
     const existing = byCode.get(code);
     if (existing) return existing;
+    const named = catalog.get(code);
     const node: TrialBalanceNode = {
-      accountId: seed?.accountId ?? '',
+      accountId: seed?.accountId ?? named?.accountId ?? '',
       code,
-      name: seed?.name ?? code,
-      type: seed?.type ?? 'ASSET',
-      nature: seed?.nature ?? 'DEBIT',
+      name: seed?.name ?? named?.name ?? code,
+      type: seed?.type ?? named?.type ?? 'ASSET',
+      nature: seed?.nature ?? named?.nature ?? 'DEBIT',
       level: code.length,
       isPostable: seed !== undefined,
       openingBalance: '0',
@@ -116,8 +133,11 @@ export const buildTrialBalance = (
         node.isPostable ? node.credit : '0',
         ...node.children.map((c) => c.credit),
       ]).toFixed(4);
+      // La clasificación de una agrupación sale del plan de cuentas; solo si
+      // falta se hereda de la primera hija, que es lo correcto en el PUC porque
+      // la clase la fija el primer dígito del código.
       const first = node.children[0];
-      if (first && !node.isPostable) {
+      if (first && !node.isPostable && !catalog.has(node.code)) {
         node.type = first.type;
         node.nature = first.nature;
       }
