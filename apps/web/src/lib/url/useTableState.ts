@@ -22,7 +22,7 @@ export interface TableState {
   filters: FilterClause[];
 }
 
-const parseFilters = (params: URLSearchParams): FilterClause[] => {
+export const parseFilters = (params: URLSearchParams): FilterClause[] => {
   const filters: FilterClause[] = [];
   for (const [key, value] of params.entries()) {
     const match = /^filter\[([^\]]+)\](?:\[([^\]]+)\])?$/.exec(key);
@@ -38,7 +38,7 @@ const parseFilters = (params: URLSearchParams): FilterClause[] => {
   return filters;
 };
 
-const parseSort = (raw: string | null): SortClause[] =>
+export const parseSort = (raw: string | null): SortClause[] =>
   (raw ?? '')
     .split(',')
     .map((s) => s.trim())
@@ -48,6 +48,23 @@ const parseSort = (raw: string | null): SortClause[] =>
         ? { field: s.slice(1), dir: 'desc' as const }
         : { field: s.replace(/^\+/, ''), dir: 'asc' as const },
     );
+
+/** Serializa el estado a la querystring que entiende la API. Se exporta aparte
+ *  del hook para poder probarla sin montar un router. */
+export const stateToQuery = (state: TableState): URLSearchParams => {
+  const q = new URLSearchParams();
+  q.set('page', String(state.page));
+  q.set('pageSize', String(state.pageSize));
+  if (state.sort.length > 0) {
+    q.set('sort', state.sort.map((s) => (s.dir === 'desc' ? `-${s.field}` : s.field)).join(','));
+  }
+  if (state.search) q.set('q', state.search);
+  for (const f of state.filters) {
+    const value = Array.isArray(f.value) ? f.value.join(',') : String(f.value);
+    q.set(f.op === 'eq' ? `filter[${f.field}]` : `filter[${f.field}][${f.op}]`, value);
+  }
+  return q;
+};
 
 export interface UseTableStateOptions {
   defaultSort?: SortClause[];
@@ -146,20 +163,7 @@ export function useTableState(options: UseTableStateOptions = {}) {
   const clearFilters = useCallback(() => update({ filters: [], search: '' }), [update]);
 
   /** Querystring lista para la API: el mismo formato que la del navegador. */
-  const toQuery = useCallback((): URLSearchParams => {
-    const q = new URLSearchParams();
-    q.set('page', String(state.page));
-    q.set('pageSize', String(state.pageSize));
-    if (state.sort.length > 0) {
-      q.set('sort', state.sort.map((s) => (s.dir === 'desc' ? `-${s.field}` : s.field)).join(','));
-    }
-    if (state.search) q.set('q', state.search);
-    for (const f of state.filters) {
-      const value = Array.isArray(f.value) ? f.value.join(',') : String(f.value);
-      q.set(f.op === 'eq' ? `filter[${f.field}]` : `filter[${f.field}][${f.op}]`, value);
-    }
-    return q;
-  }, [state]);
+  const toQuery = useCallback((): URLSearchParams => stateToQuery(state), [state]);
 
   return { state, update, toggleSort, setFilter, clearFilters, toQuery };
 }

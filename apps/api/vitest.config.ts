@@ -4,11 +4,11 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
-    // Los tests de integración comparten un clúster de PostgreSQL: cada archivo
-    // clona su propia base desde una plantilla, así que pueden ir en paralelo,
-    // pero no conviene saturar el pool de conexiones.
+    // La plantilla con las migraciones se prepara una sola vez; cada fichero la
+    // clona en su propia base, así que pueden correr en paralelo.
+    globalSetup: ['./tests/setup/globalSetup.ts'],
     pool: 'forks',
-    poolOptions: { forks: { singleFork: false, maxForks: 4 } },
+    poolOptions: { forks: { maxForks: 4 } },
     testTimeout: 30_000,
     hookTimeout: 60_000,
   },

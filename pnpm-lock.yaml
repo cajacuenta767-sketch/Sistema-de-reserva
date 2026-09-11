@@ -248,25 +248,6 @@ importers:
         specifier: ^3.0.5
         version: 3.2.7(@types/node@22.20.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.13)
 
-  apps/worker:
-    dependencies:
-      '@erp/api':
-        specifier: workspace:*
-        version: link:../api
-      '@erp/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      dotenv:
-        specifier: ^16.4.7
-        version: 16.6.1
-    devDependencies:
-      tsx:
-        specifier: ^4.19.2
-        version: 4.23.13
-      typescript:
-        specifier: ^5.9.2
-        version: 5.9.3
-
   packages/contracts:
     dependencies:
       '@erp/core':

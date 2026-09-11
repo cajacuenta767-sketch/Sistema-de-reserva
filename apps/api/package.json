@@ -14,7 +14,9 @@
     "test": "vitest run",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
-    "lint": "eslint src --max-warnings=0"
+    "lint": "eslint src --max-warnings=0",
+    "worker": "tsx src/bootstrap/worker.ts",
+    "start:worker": "node dist/bootstrap/worker.js"
   },
   "dependencies": {
     "@erp/contracts": "workspace:*",

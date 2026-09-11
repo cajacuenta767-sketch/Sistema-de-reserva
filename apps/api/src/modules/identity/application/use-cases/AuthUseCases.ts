@@ -249,7 +249,11 @@ export class AuthUseCases {
     const outcome: AuthResult | { readonly reuseDetectedFor: string } = await withoutTenant(
       this.pool,
       async (tx) => {
-        const stored = await this.refreshTokens.findActiveByHash(tx, hashToken(refreshToken));
+        const stored = await this.refreshTokens.findActiveByHash(
+          tx,
+          hashToken(refreshToken),
+          this.clock.now(),
+        );
         if (!stored) throw AppError.unauthorized('Token de refresco inválido');
 
         // Ojo: la revocación NO puede hacerse aquí. Lanzar el error revierte la
@@ -286,7 +290,7 @@ export class AuthUseCases {
 
   async logout(refreshToken: string): Promise<void> {
     await withoutTenant(this.pool, async (tx) => {
-      const stored = await this.refreshTokens.findActiveByHash(tx, hashToken(refreshToken));
+      const stored = await this.refreshTokens.findActiveByHash(tx, hashToken(refreshToken), this.clock.now());
       if (stored) await this.refreshTokens.revoke(tx, stored.id);
     });
   }
@@ -513,7 +517,7 @@ export class AuthUseCases {
   }
 
   private async acceptInvitationInternal(tx: Tx, user: User, token: string): Promise<string> {
-    const invitation = await this.invitations.findPendingByHash(tx, hashToken(token));
+    const invitation = await this.invitations.findPendingByHash(tx, hashToken(token), this.clock.now());
     if (!invitation) throw AppError.validation('La invitación no es válida o ya caducó');
     if (invitation.email.toLowerCase() !== user.email.toLowerCase()) {
       throw AppError.forbidden('Esta invitación es para otro correo');

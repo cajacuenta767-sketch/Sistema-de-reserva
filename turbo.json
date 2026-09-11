@@ -1,13 +1,52 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["NODE_ENV", "DATABASE_URL", "VITE_API_URL", "VITE_APP_NAME"],
+  "globalEnv": [
+    "NODE_ENV",
+    "DATABASE_URL",
+    "VITE_API_URL",
+    "VITE_APP_NAME"
+  ],
   "tasks": {
-    "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
-    "typecheck": { "dependsOn": ["^build"] },
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
+    },
+    "typecheck": {
+      "dependsOn": [
+        "^build"
+      ]
+    },
     "lint": {},
-    "test": { "dependsOn": ["^build"] },
-    "test:unit": { "dependsOn": ["^build"] },
-    "test:integration": { "dependsOn": ["^build"], "cache": false },
-    "dev": { "cache": false, "persistent": true }
+    "test": {
+      "dependsOn": [
+        "^build"
+      ],
+      "cache": false,
+      "env": [
+        "DATABASE_URL",
+        "DATABASE_MIGRATION_URL",
+        "JWT_ACCESS_SECRET",
+        "JWT_REFRESH_SECRET"
+      ]
+    },
+    "test:unit": {
+      "dependsOn": [
+        "^build"
+      ]
+    },
+    "test:integration": {
+      "dependsOn": [
+        "^build"
+      ],
+      "cache": false
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
   }
 }

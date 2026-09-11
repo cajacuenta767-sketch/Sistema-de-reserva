@@ -1,60 +1,43 @@
-# Plan de funcionalidades
+# Plan por fases
 
-Estado: ✅ implementado · 🧭 propuesto para siguientes versiones.
+Cada fase termina con algo demostrable y probado.
 
-## 1. Cuentas y seguridad
-- ✅ Registro y login con JWT (access 15 min + refresh 7 días) y renovación automática en el cliente.
-- ✅ Roles `CLIENT`, `STAFF`, `ADMIN` con autorización por ruta y por recurso (un cliente solo ve sus reservas; un profesional solo su agenda).
-- ✅ Perfil editable (nombre, teléfono, dirección, ciudad) y cambio de contraseña.
-- ✅ Hash scrypt, rate limiting en `/auth`, Helmet, CORS configurable.
-- 🧭 Verificación de correo, recuperación de contraseña, login social.
+| #   | Fase                                                                                                                                                                                                    | Entregable verificable                                                                                                                   | Estado |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| 0   | **Cimientos** — monorepo, PostgreSQL con RLS, identidad, RBAC, auditoría, eventos, design system, DataTable, CI                                                                                         | Entrar → elegir empresa → gestionar personas, roles y permisos; sin permiso, 403 y menú oculto; claro/oscuro; un número recolorea la app | ✅     |
+| 1   | **CRM y catálogo** — clientes y proveedores unificados, contactos, etiquetas, campos personalizados, adjuntos, actividades, embudos; productos, unidades, impuestos, listas de precios; importación CSV | Importar 500 clientes con mapeo de columnas y abrir una ficha con pestañas                                                               |        |
+| 2   | **Ventas** — cotizaciones → facturas → pagos, notas de crédito, PDF, envío por correo, recurrentes                                                                                                      | Cotización → enviar → convertir → pago parcial → saldo y PDF                                                                             |        |
+| 3   | **Contabilidad** — PUC colombiano, diarios, asientos, motor de contabilización, años y periodos, balance de prueba, P&G, balance general                                                                | Emitir factura genera asiento; el balance cuadra; cerrar enero bloquea enero; drill-down hasta la factura                                |        |
+| 4   | **Compras e inventario** — requisiciones, órdenes, recepciones, facturas de proveedor; bodegas, movimientos, costo promedio                                                                             | OC → recepción → factura → pago; vender descuenta stock y contabiliza el costo                                                           |        |
+| 5   | **Proyectos y tiempos** — kanban, subtareas, temporizador, gastos, facturación de horas                                                                                                                 | Registrar 10 h y generar la factura con esas horas como líneas                                                                           |        |
+| 6   | **Tickets, calendario y Escritorio** — SLA, calendario con cuatro vistas y recurrencia, los widgets del Escritorio incluido el fichaje                                                                  | El Escritorio muestra datos reales coherentes con los permisos                                                                           |        |
+| 7   | **Bancos e informes** — extractos, conciliación con sugerencias, cartera por edades                                                                                                                     | Importar un extracto de 200 líneas y conciliar el 80 %                                                                                   |        |
+| 8   | **RRHH y nómina** — empleados, contratos, ausencias, liquidación con seguridad social colombiana                                                                                                        | Liquidar 10 empleados con asiento cuadrado                                                                                               |        |
+| 9   | **Facturación electrónica DIAN** — resoluciones, UBL 2.1, CUFE, firma, QR, acuses                                                                                                                       | Factura aceptada en el ambiente de habilitación                                                                                          |        |
+| 10  | **Módulos restantes** — suscripciones, activos, reclutamiento, encuestas, referidos, reservas (ReservaFlow migrado), tienda                                                                             | Cada módulo con su listado, ficha y widget                                                                                               |        |
+| 11  | **Plataforma** — API pública, webhooks, automatizaciones, portal de cliente, constructor de informes                                                                                                    | Webhook firmado con reintentos; el cliente aprueba una cotización desde el portal                                                        |        |
+| 12  | **Diferenciadores** — IA, PWA sin conexión, segundo idioma, Gantt, aprobaciones                                                                                                                         |                                                                                                                                          |        |
 
-## 2. Catálogo
-- ✅ Categorías y servicios con duración, buffer de descanso, precio, imagen, destacado, activo/inactivo.
-- ✅ CRUD completo desde el panel admin.
+## Lo que este sistema hace y el de referencia no
 
-## 3. Profesionales
-- ✅ Perfil público (foto, cargo, bio, contacto), servicios que ofrece, rating agregado y trabajos completados.
-- ✅ Horario semanal con múltiples rangos por día y bloqueos puntuales (vacaciones, citas médicas).
-- ✅ El profesional edita su propio horario; el admin edita el de cualquiera.
+Dos carencias del CRM que sirvió de referencia, y las dos con valor comercial
+directo al cubrirlas:
 
-## 4. Motor de disponibilidad
-- ✅ Franjas = horario del día − bloqueos − reservas activas (con buffer simétrico) − anticipación mínima (60 min).
-- ✅ Consulta por día (`/staff/:id/availability`) y resumen mensual para pintar el calendario.
-- ✅ Filtros "disponible hoy / mañana" y "próxima fecha disponible".
-- ✅ Chequeo de solapamiento repetido dentro de la transacción de inserción (evita carreras).
+- **No tiene auditoría real.** Aquí cada cambio queda registrado con el detalle
+  de qué campo pasó de qué a qué, y la tabla no admite UPDATE ni DELETE.
+- **No tiene cierre contable.** Sin cierre, cualquiera puede modificar una
+  factura del año pasado y descuadrar un balance ya presentado.
 
-## 5. Reservas
-- ✅ Frecuencias `ONCE`, `WEEKLY` (4), `BIWEEKLY` (3), `MONTHLY` (3), configurables hasta 12 ocurrencias; la serie se crea completa o no se crea (todo o nada).
-- ✅ Código de confirmación legible (`RF-XXXXXX`) y consulta pública por código.
-- ✅ Estados `PENDING → CONFIRMED → IN_PROGRESS → COMPLETED | CANCELLED | NO_SHOW` con transiciones validadas.
-- ✅ Cancelación (individual o resto de la serie) con política de 2 h de antelación para clientes; reprogramación con validación de cupo.
-- ✅ Cotización previa (precio, descuento, total por serie), cupón, notas y dirección del servicio.
-- ✅ Recordatorios automáticos cada hora para citas de las próximas 24 h.
+El resto de mejoras, en orden de cuándo se pueden añadir:
 
-## 6. Reseñas
-- ✅ Solo sobre reservas completadas, una por reserva; recalcula el promedio del profesional.
-- ✅ Testimonios en la portada y filtro por profesional.
+**Desde la Fase 0 (no se pueden añadir después sin migrar todo):** multiempresa
+con aislamiento en la base de datos, permisos granulares con alcance, vistas
+guardadas y filtros en la URL, búsqueda global y paleta ⌘K, modo oscuro, marca
+blanca por empresa.
 
-## 7. Cupones
-- ✅ Porcentaje o monto fijo, mínimo de compra, límite de usos, vigencia, activación.
-- ✅ Validación pública y gestión desde el panel admin.
-
-## 8. Notificaciones
-- ✅ In-app (campana con contador) + adaptador de correo intercambiable (consola en desarrollo).
-- ✅ Eventos: creación, confirmación, cancelación, reprogramación, completada, recordatorio, reseña recibida, cupo liberado.
-- 🧭 Proveedor SMTP/SendGrid, WhatsApp/SMS, push.
-
-## 9. Lista de espera
-- ✅ El cliente se apunta a una fecha; al liberarse un cupo (cancelación/reprogramación) se le notifica.
-
-## 10. Paneles
-- ✅ Cliente: asistente de reserva, mis reservas (próximas/historial), reprogramar, cancelar, reseñar, notificaciones, perfil.
-- ✅ Profesional: agenda diaria con cambio de estado, métricas personales, editor de horario y bloqueos.
-- ✅ Admin: dashboard (reservas, ingresos, estados, últimos 14 días, equipo), reservas, servicios, personal, cupones, bandeja de correos simulados.
-- 🧭 Vista de calendario semanal para admin, exportación CSV, pagos en línea, multi-sede y zona horaria por negocio.
-
-## Calidad
-- ✅ 40 tests: dominio puro (cálculo de franjas, recurrencia) e integración HTTP del flujo completo.
-- ✅ Tipado estricto en ambos proyectos; build de producción verificado.
-- ✅ Recorrido end-to-end verificado con Chromium (escritorio 1280 px y móvil 400 px).
+**Más adelante:** conciliación bancaria con sugerencias, firma electrónica de
+cotizaciones, portal de cliente y proveedor, API pública con webhooks firmados,
+automatizaciones «si pasa X haz Y», flujos de aprobación, informes programados,
+presupuesto contra real, Gantt con ruta crítica, 2FA, facturación y nómina
+electrónica DIAN, TRM automática del Banco de la República, PWA sin conexión, y
+asistencia por IA para resúmenes y categorización de transacciones.

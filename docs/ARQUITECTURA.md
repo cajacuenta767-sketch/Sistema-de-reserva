@@ -1,54 +1,145 @@
 # Arquitectura
 
-## Backend (hexagonal / clean)
+## Por qué PostgreSQL y no algo más simple
+
+La contabilidad de partida doble necesita `NUMERIC` exacto, restricciones
+diferidas para comprobar que débito iguala a crédito al cerrar la transacción, y
+`SELECT … FOR UPDATE` para asignar consecutivos de factura sin huecos ni
+repeticiones. Nada de eso existe en SQLite.
+
+Y sobre todo: **Row Level Security**. Con 20 módulos y varios cientos de
+endpoints, la probabilidad de que alguien olvide un `WHERE organization_id` en
+algún punto tiende a 1. Con RLS, olvidarlo no filtra datos de otra empresa:
+devuelve cero filas.
+
+## Aislamiento entre empresas
+
+Hay dos clases de tabla, y la frontera entre ellas es la decisión de seguridad
+más importante del sistema.
+
+**Tablas de negocio.** Llevan `organization_id NOT NULL`, RLS activada y
+_forzada_ (`FORCE ROW LEVEL SECURITY`, que aplica la política incluso al dueño de
+la tabla). Cada petición abre una transacción con `SET LOCAL
+app.organization_id`, y `SET LOCAL` se deshace solo al terminar, de modo que una
+conexión devuelta al pool nunca arrastra el tenant de la petición anterior.
+
+**Tablas de frontera** (`users`, `memberships`, `invitations`). Hay que
+consultarlas _antes_ de saber en qué empresa está el usuario: al iniciar sesión,
+al listar sus empresas, al aceptar una invitación. `users` y `memberships`
+llevan una política de doble modo —por organización cuando hay una activa, por
+usuario cuando todavía no la hay— y las invitaciones se localizan por el hash de
+su token, que es el secreto que demuestra que a esa persona la invitaron.
+
+Esta frontera costó un fallo real: `memberships` quedó exenta de RLS y el
+listado de personas devolvía usuarios de otras empresas. La lección es que
+"filtrar a mano en cada consulta" no es una defensa, y por eso el arreglo fue
+una política de base de datos y no un `WHERE` más.
+
+## Módulos
+
+Un módulo declara qué necesita y qué ofrece:
+
+```ts
+defineModule({
+  id: 'invoicing',
+  dependsOn: ['crm', 'catalog'],
+  permissions: [...],
+  register(ctx) { /* repos y casos de uso */ return api },
+  routes(ctx, api) { /* Router de Express */ },
+  subscriptions(ctx, api) { /* reacciones a eventos */ },
+})
+```
+
+El registro los ordena por dependencias, los construye y monta sus rutas en
+bucle. `container.ts` no conoce ningún módulo concreto y por eso no crece.
+
+Dentro, cada módulo respeta la hexagonal:
 
 ```
-src/
-├─ domain/            Reglas de negocio puras. Sin dependencias externas.
-│  ├─ entities/       User, Service, Staff, Booking, Review, Coupon, Notification, Waitlist
-│  └─ services/       SlotCalculator (franjas), RecurrenceGenerator (series)
-├─ application/       Orquestación. Depende solo del dominio y de puertos.
-│  ├─ ports/          Interfaces: repositorios, PasswordHasher, TokenService, Mailer
-│  ├─ services/       NotificationService (in-app + email)
-│  └─ use-cases/      auth · catalog · staff · bookings · reviews · coupons · notifications · waitlist · admin
-├─ infrastructure/    Adaptadores concretos.
-│  ├─ db/             node:sqlite, migraciones SQL, repositorios Sqlite*
-│  ├─ security/       ScryptPasswordHasher, JwtTokenService
-│  ├─ notifications/  ConsoleMailer
-│  ├─ http/           Express: app, rutas, middlewares (auth, validate, error), esquemas Zod
-│  └─ container.ts    Raíz de composición (inyección de dependencias manual)
-├─ shared/            AppError, Clock, ids, utilidades de fecha, logger
-└─ main.ts            Arranque del servidor + recordatorios periódicos
+modules/invoicing/
+├─ index.ts          API pública: lo ÚNICO importable desde fuera
+├─ module.ts         registro
+├─ domain/           entidades planas y funciones puras (cálculo de impuestos,
+│                    máquinas de estado) — se prueban sin base de datos
+├─ application/      puertos y casos de uso; NUNCA importa infraestructura
+└─ infrastructure/   repositorios PostgreSQL, rutas HTTP, PDF, trabajos
 ```
 
-### Decisiones
-- **Dependencias hacia adentro**: `infrastructure → application → domain`. Cambiar SQLite por Postgres solo implica nuevos repositorios.
-- **Reloj inyectable (`Clock`)**: los tests fijan la fecha y el motor de disponibilidad es determinista.
-- **Tiempo local del negocio**: las agendas usan `YYYY-MM-DDTHH:MM` sin zona horaria (comparación lexicográfica). Las marcas de auditoría son ISO UTC. Ver `shared/dates.ts`.
-- **Errores tipados** (`AppError` con `code`) → respuesta uniforme `{ error: { code, message, details } }` y status HTTP coherente.
-- **Transacciones**: la inserción de una serie de reservas es atómica y repite el chequeo de solape dentro de la transacción.
-- **Validación en el borde**: todos los `body/query/params` pasan por Zod antes de llegar a los casos de uso.
+`apps/api/tests/architecture.test.ts` analiza los imports reales y falla si
+alguien cruza una de esas fronteras. Se probó primero con
+`eslint-plugin-boundaries`, pero su versión 7 no clasificaba estos elementos y
+dejaba pasar violaciones evidentes; una regla que no falla cuando debe es peor
+que no tenerla.
 
-### Flujo de una reserva
-1. `POST /bookings` → `validate(bookingCreateBody)` → `BookingUseCases.create`.
-2. Carga servicio, profesional y cliente; comprueba que el profesional ofrece el servicio.
-3. `RecurrenceGenerator` produce las fechas de la serie.
-4. `quote()` aplica el cupón y calcula totales.
-5. Para cada fecha, `SlotCalculator.isAvailable` valida horario, bloqueos y solapes.
-6. `BookingRepository.saveMany` inserta en una transacción (o falla completa).
-7. `NotificationService` notifica a cliente y profesional (in-app + email).
+## Comunicación entre módulos
+
+Por eventos, no por referencias. `invoicing` no conoce `accounting`: publica
+`invoice.issued` y `accounting` lo escucha. Eso elimina la mayoría de las
+aristas del grafo de dependencias.
+
+El bus tiene dos modos, y la diferencia importa:
+
+- **Transaccional** — el manejador corre dentro de la misma transacción. Es lo
+  que garantiza que no exista una factura emitida sin su asiento contable. Se
+  reserva para lo que debe ser atómico.
+- **Diferido** — el evento se escribe en `outbox_events` en la misma transacción
+  y un trabajador lo entrega después, con reintentos. Correos, PDF y webhooks van
+  por aquí: que el servidor de correo esté caído no puede impedir facturar.
+
+En los dos casos, el evento y el cambio se guardan juntos o no se guarda nada.
+
+## Permisos
+
+Clave `modulo:recurso:accion`, con alcance `OWN < TEAM < BRANCH < ORG`. El
+permiso efectivo es la unión de los roles más las excepciones ALLOW menos las
+DENY, y **DENY siempre gana**.
+
+El catálogo no se escribe a mano: cada módulo declara sus permisos y el arranque
+los sincroniza con la tabla. Exigir un permiso que no existe revienta al
+arrancar, no en silencio.
+
+Se comprueba en tres niveles:
+
+1. **Middleware** — puerta gruesa, rechaza sin tocar la base de datos.
+2. **Alcance empujado a la consulta** — `OWN` se traduce a
+   `ownerMembershipId = …` _en el SQL_. Listar todo y filtrar en memoria
+   funciona con diez filas y filtra datos ajenos con diez mil. Los agregados del
+   dashboard usan el mismo filtro, así que nunca muestran cifras que el usuario
+   no puede abrir.
+3. **Políticas en el caso de uso** — lo que un permiso no puede expresar: una
+   factura pagada exige nota de crédito, un periodo cerrado no admite asientos.
+
+## El contrato de listado
+
+Un solo formato para todos los módulos:
+
+```
+GET /api/v1/sales/invoices?page=1&pageSize=25&sort=-issue_date&q=acme
+    &filter[status]=ISSUED,OVERDUE&filter[issue_date][gte]=2026-01-01
+→ { items, total, page, pageSize, aggregates }
+```
+
+Los campos que se pueden filtrar y ordenar están declarados en una lista blanca;
+un nombre de columna jamás llega del cliente al SQL. Sin eso, `sort` sería una
+inyección de manual.
+
+Esa uniformidad es lo que permite que la DataTable del frontend funcione con
+cualquier módulo sin adaptadores, y que un módulo nuevo tenga su pantalla de
+listado completa en un día.
 
 ## Frontend
 
-```
-src/
-├─ api/          client.ts (fetch + refresh automático de token), types.ts
-├─ store/        auth.tsx (contexto de sesión), toast.tsx
-├─ lib/          format.ts (moneda, fechas, etiquetas), useAsync.ts
-├─ components/   ui (primitivas), layout (Shell, Guard), booking (Calendar, StaffCard, BookingCard, RescheduleModal, Testimonials)
-└─ pages/        Home, Book (asistente), Success, Auth, MyBookings, Notifications, Profile, Track, staff/Agenda, admin/*
-```
+El mismo patrón: cada módulo aporta su menú, sus rutas, sus widgets del
+Escritorio y sus comandos de la paleta ⌘K. `app/features.tsx` es la única lista
+que crece.
 
-- El asistente de reserva guarda su estado en `sessionStorage`, de modo que iniciar sesión a mitad de camino no pierde la selección.
-- Tailwind v4 con tokens propios (`@theme`) y utilidades compuestas (`btn-primary`, `card`, `input`) en `index.css`.
-- Diseño responsive: rejillas que colapsan a una columna, barra de navegación inferior pegajosa en el asistente y menú móvil.
+Toda la identidad visual sale de un número: `--brand-h`. La escala se deriva en
+OKLCH, cuya luminancia es perceptualmente uniforme, así que la rampa mantiene el
+contraste con cualquier matiz —con HSL, pasar de azul a amarillo destrozaría la
+legibilidad—. `organizations.brand_hue` lo hace configurable por empresa, sin
+recompilar.
+
+La regla que sostiene el modo oscuro: ningún componente escribe un color crudo.
+Solo `bg-surface`, `text-fg-muted`, `border-border`, `bg-accent`. Lo verifica el
+lint, porque basta un `bg-white` olvidado para que una pantalla quede ilegible en
+oscuro y nadie lo note mirando en claro.

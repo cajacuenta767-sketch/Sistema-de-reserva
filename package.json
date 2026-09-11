@@ -20,7 +20,10 @@
     "db:reset": "pnpm -F @erp/api db:reset",
     "seed": "pnpm -F @erp/api seed",
     "format": "prettier --write \"**/*.{ts,tsx,json,css,md}\"",
-    "format:check": "prettier --check \"**/*.{ts,tsx,json,css,md}\""
+    "format:check": "prettier --check \"**/*.{ts,tsx,json,css,md}\"",
+    "dev:reset": "bash scripts/dev-reset.sh",
+    "walkthrough": "node scripts/walkthrough.mjs",
+    "worker": "pnpm -F @erp/api worker"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

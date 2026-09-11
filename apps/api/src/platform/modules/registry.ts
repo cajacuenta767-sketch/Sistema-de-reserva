@@ -1,6 +1,39 @@
 import { Router } from 'express';
 import type { ModuleContext, ModuleDefinition } from './types.js';
 
+export interface RouteInfo {
+  method: 'get' | 'post' | 'patch' | 'put' | 'delete';
+  path: string;
+  module?: string;
+}
+
+interface RouterLayer {
+  route?: { path: string | string[]; methods: Record<string, boolean> };
+  handle?: { stack?: RouterLayer[] };
+}
+
+/** Extrae las rutas de un Router de Express. Las rutas hijas son relativas, que
+ *  es justo lo que se necesita: el prefijo lo pone quien monta. */
+const routesOf = (router: Router): RouteInfo[] => {
+  const found: RouteInfo[] = [];
+  const walk = (layers: RouterLayer[]): void => {
+    for (const layer of layers) {
+      if (layer.route) {
+        const paths = Array.isArray(layer.route.path) ? layer.route.path : [layer.route.path];
+        for (const path of paths) {
+          for (const method of Object.keys(layer.route.methods)) {
+            if (method !== '_all') found.push({ method: method as RouteInfo['method'], path });
+          }
+        }
+      } else if (layer.handle?.stack) {
+        walk(layer.handle.stack);
+      }
+    }
+  };
+  walk((router as unknown as { stack: RouterLayer[] }).stack ?? []);
+  return found;
+};
+
 interface RegisteredModule {
   def: ModuleDefinition<string, unknown>;
   api: unknown;
@@ -76,15 +109,33 @@ export class ModuleRegistry {
     return [...this.modules.keys()];
   }
 
-  /** Monta las rutas de todos los módulos bajo su `basePath`. */
+  private readonly routes: RouteInfo[] = [];
+
+  /**
+   * Monta las rutas de todos los módulos bajo su `basePath` y, de paso, anota
+   * la tabla de rutas.
+   *
+   * Se anota aquí porque Express 5 NO permite recuperar el prefijo de montaje
+   * después: su matcher es un cierre sobre una expresión regular, sin la ruta
+   * original. Y sin la tabla, un test que recorra las rutas para comprobar
+   * permisos probaría rutas inexistentes y pasaría en vacío, que es peor que no
+   * tenerlo. La tabla sirve además para generar el OpenAPI.
+   */
   buildRouter(ctx: ModuleContext): Router {
     const router = Router();
     for (const { def, api } of this.modules.values()) {
       if (!def.routes) continue;
+      const basePath = def.basePath ?? '';
       const sub = def.routes(ctx, api);
-      router.use(def.basePath ?? '', sub);
+      this.routes.push(...routesOf(sub).map((r) => ({ ...r, module: def.id, path: basePath + r.path })));
+      router.use(basePath, sub);
     }
     return router;
+  }
+
+  /** Tabla de rutas montadas, relativa a la raíz de la API. */
+  routeTable(): readonly RouteInfo[] {
+    return this.routes;
   }
 
   /** Conecta suscripciones, trabajos y proveedores de búsqueda. */

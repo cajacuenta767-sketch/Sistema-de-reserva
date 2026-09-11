@@ -82,9 +82,12 @@ export interface RefreshTokenRepository {
       ip?: string | null;
     },
   ): Promise<void>;
+  /** `now` viene del reloj inyectado: si la consulta usara `now()` de
+   *  PostgreSQL, un test con reloj fijo compararía contra dos relojes distintos. */
   findActiveByHash(
     tx: Tx,
     tokenHash: string,
+    now: Date,
   ): Promise<{ id: string; userId: string; revokedAt: Date | null } | null>;
   /** Marca el token como usado y enlaza el que lo sustituye (detección de reuso). */
   rotate(tx: Tx, oldId: string, newId: string): Promise<void>;
@@ -108,6 +111,7 @@ export interface InvitationRepository {
   findPendingByHash(
     tx: Tx,
     tokenHash: string,
+    now: Date,
   ): Promise<{ id: string; organizationId: string; email: string; roleIds: string[] } | null>;
   markAccepted(tx: Tx, id: string, at: Date): Promise<void>;
   listPending(

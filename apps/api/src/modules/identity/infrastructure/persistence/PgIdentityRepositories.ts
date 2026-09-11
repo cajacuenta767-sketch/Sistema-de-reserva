@@ -461,10 +461,11 @@ export class PgRefreshTokenRepository implements RefreshTokenRepository {
   async findActiveByHash(
     tx: Tx,
     tokenHash: string,
+    now: Date,
   ): Promise<{ id: string; userId: string; revokedAt: Date | null } | null> {
     const { rows } = await tx.client.query<{ id: string; user_id: string; revoked_at: Date | null }>(
-      'SELECT id, user_id, revoked_at FROM refresh_tokens WHERE token_hash = $1 AND expires_at > now()',
-      [tokenHash],
+      'SELECT id, user_id, revoked_at FROM refresh_tokens WHERE token_hash = $1 AND expires_at > $2',
+      [tokenHash, now],
     );
     const row = rows[0];
     return row ? { id: row.id, userId: row.user_id, revokedAt: row.revoked_at } : null;
@@ -523,6 +524,7 @@ export class PgInvitationRepository implements InvitationRepository {
   async findPendingByHash(
     tx: Tx,
     tokenHash: string,
+    now: Date,
   ): Promise<{ id: string; organizationId: string; email: string; roleIds: string[] } | null> {
     // Sin RLS aquí a propósito: quien acepta una invitación todavía no pertenece
     // a la organización, así que la consulta va por el hash del token, que es el
@@ -534,8 +536,8 @@ export class PgInvitationRepository implements InvitationRepository {
       role_ids: string[];
     }>(
       `SELECT id, organization_id, email, role_ids FROM invitations
-        WHERE token_hash = $1 AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > now()`,
-      [tokenHash],
+        WHERE token_hash = $1 AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > $2`,
+      [tokenHash, now],
     );
     const row = rows[0];
     return row

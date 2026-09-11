@@ -33,6 +33,17 @@ const sanitize = (obj: Record<string, unknown> | null | undefined): Record<strin
 };
 
 /**
+ * Campos que nunca cuentan como "cambio".
+ *
+ * `updatedAt` cambia por definición en cada actualización, así que listarlo como
+ * campo modificado es ruido puro. Además, el disparador de la base lo fija con
+ * el `now()` de PostgreSQL mientras la entidad lo lleva del reloj inyectado:
+ * con un reloj fijo los dos valores difieren siempre y toda actualización
+ * parecería tener cambios, incluso una que no cambia nada.
+ */
+const NOT_A_CHANGE = new Set(['updatedAt', 'updated_at', 'createdAt', 'created_at']);
+
+/**
  * Calcula qué cambió realmente. Registrar "se actualizó la factura" sin decir
  * qué campo no sirve de nada cuando hay que explicar por qué cuadró distinto.
  */
@@ -44,6 +55,7 @@ export const diffFields = (
   const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
   const changed: string[] = [];
   for (const key of keys) {
+    if (NOT_A_CHANGE.has(key)) continue;
     const a = before[key];
     const b = after[key];
     if (a instanceof Date && b instanceof Date) {
