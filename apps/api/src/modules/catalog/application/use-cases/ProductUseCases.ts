@@ -22,6 +22,7 @@ import type {
   ProductRepository,
   ProductRow,
   TaxRepository,
+  TaxRow,
   UomRepository,
   VariantRepository,
 } from '../ports/CatalogRepositories.js';
@@ -61,14 +62,26 @@ export interface CreateProductInput {
 
 export type UpdateProductInput = Partial<CreateProductInput>;
 
+/** Impuesto tal como lo necesita la ficha para mostrarse. */
+export interface TaxRef {
+  id: string;
+  code: string;
+  name: string;
+  kind: string;
+  rate: string;
+}
+
 /** Ficha completa del producto, tal como la pinta la pantalla de detalle. */
 export interface ProductDetail {
   product: Product;
   variants: ProductVariant[];
   uom: { id: string; code: string; name: string; precision: number } | null;
   categoryPath: string | null;
-  saleTax: { id: string; code: string; name: string; rate: string } | null;
-  purchaseTax: { id: string; code: string; name: string; rate: string } | null;
+  // `kind` va incluido porque decide cómo se escribe la tarifa: el ReteICA se
+  // publica por mil (9,66 × 1000) y el resto en porcentaje. Sin él, la pantalla
+  // tendría que adivinarlo por el código del impuesto.
+  saleTax: TaxRef | null;
+  purchaseTax: TaxRef | null;
   /** Margen sobre el precio de compra. `null` si no hay precio de venta. */
   marginPercent: string | null;
 }
@@ -109,10 +122,8 @@ export class ProductUseCases {
       variants,
       uom: uom ? { id: uom.id, code: uom.code, name: uom.name, precision: uom.precision } : null,
       categoryPath: category?.path ?? null,
-      saleTax: saleTax ? { id: saleTax.id, code: saleTax.code, name: saleTax.name, rate: saleTax.rate } : null,
-      purchaseTax: purchaseTax
-        ? { id: purchaseTax.id, code: purchaseTax.code, name: purchaseTax.name, rate: purchaseTax.rate }
-        : null,
+      saleTax: taxRef(saleTax),
+      purchaseTax: taxRef(purchaseTax),
       marginPercent: marginPercent(product.salePrice, product.purchasePrice),
     };
   }
@@ -489,3 +500,6 @@ export class ProductUseCases {
     }
   }
 }
+
+const taxRef = (tax: TaxRow | null): TaxRef | null =>
+  tax ? { id: tax.id, code: tax.code, name: tax.name, kind: tax.kind, rate: tax.rate } : null;

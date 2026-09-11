@@ -89,13 +89,19 @@ const tryRefresh = async (): Promise<boolean> => {
   })
     .then(async (res) => {
       if (!res.ok) {
-        setTokens(null);
+        // Solo se cierra la sesión si el servidor dice que el token YA NO VALE.
+        // Un 429 por límite de peticiones, un 503 o una caída momentánea son
+        // problemas pasajeros: cerrar la sesión por ellos echa a alguien que
+        // estaba trabajando y le hace perder lo que tuviera a medio escribir.
+        if (res.status === 401 || res.status === 403) setTokens(null);
         return false;
       }
       const data = (await res.json()) as { tokens: Tokens };
       setTokens(data.tokens);
       return true;
     })
+    // Un fallo de red tampoco invalida el token: al recuperar la conexión, la
+    // siguiente petición vuelve a intentarlo.
     .catch(() => false)
     .finally(() => {
       refreshing = null;

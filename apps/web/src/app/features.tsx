@@ -1,4 +1,7 @@
 import { dashboardFeature } from '@/features/dashboard/feature';
+import { crmFeature } from '@/features/crm/feature';
+import { catalogFeature } from '@/features/catalog/feature';
+import { importsFeature } from '@/features/imports/feature';
 import { accessFeature } from '@/features/access/feature';
 import { settingsFeature } from '@/features/settings/feature';
 import type { FeatureModule } from './types';
@@ -10,4 +13,11 @@ import type { FeatureModule } from './types';
  * navegación, sus comandos y sus widgets, así que ni el shell ni el router
  * cambian al añadir uno.
  */
-export const features: FeatureModule[] = [dashboardFeature, accessFeature, settingsFeature];
+export const features: FeatureModule[] = [
+  dashboardFeature,
+  crmFeature,
+  catalogFeature,
+  importsFeature,
+  accessFeature,
+  settingsFeature,
+];

@@ -4,6 +4,7 @@ import { Dialog, DialogContent, cx } from '@/design-system';
 import { useAuth, useOrganization } from '@/store/auth';
 import { useBrandHue } from '@/store/theme';
 import { features } from '../features';
+import { mergeNav } from '../nav';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
 import { CommandPalette } from './CommandPalette';
@@ -33,7 +34,7 @@ export function AppShell() {
     }
   }, [collapsed]);
 
-  const nav = features.flatMap((f) => f.nav ?? []);
+  const nav = mergeNav(features.flatMap((f) => f.nav ?? []));
   const commands = features.flatMap((f) => f.commands ?? []);
 
   return (

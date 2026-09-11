@@ -23,4 +23,5 @@ export {
   PopoverTrigger,
   PopoverContent,
 } from './primitives/overlays.jsx';
+export { Tabs, TabsList, TabsTrigger, TabsContent } from './primitives/Tabs.jsx';
 export { PageHeader, StatTile, ProgressCard } from './patterns/PageHeader.jsx';

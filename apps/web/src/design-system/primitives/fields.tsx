@@ -65,14 +65,24 @@ export function Field({ label, hint, error, required, children, className }: Fie
 
   return (
     <div className={cx('space-y-1', className)}>
-      <label htmlFor={id} className="label">
-        {label}
+      {/*
+        El asterisco va FUERA del <label>, no dentro.
+        Es una marca visual, y metida en el texto de la etiqueta pasa a formar
+        parte de él: cualquier herramienta que lea etiquetas —tests, autocompletado
+        del navegador, alguna ayuda técnica— ve "Nombre*" en lugar de "Nombre".
+        `aria-hidden` oculta el asterisco de los lectores de pantalla, pero no lo
+        saca del texto del elemento.
+      */}
+      <span className="flex items-baseline gap-0.5">
+        <label htmlFor={id} className="label">
+          {label}
+        </label>
         {required && (
-          <span className="ml-0.5 text-danger" aria-hidden>
+          <span className="text-danger" aria-hidden>
             *
           </span>
         )}
-      </label>
+      </span>
       {children({
         id,
         ...(describedBy ? { 'aria-describedby': describedBy } : {}),

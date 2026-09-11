@@ -60,21 +60,113 @@ for (const [name, path] of [
   await shot(name);
 }
 
+// ── CRM ─────────────────────────────────────────────────────────────────────
+//
+// Se crea una ficha DE VERDAD por la interfaz, no se visita la pantalla vacía:
+// un listado sin filas no demuestra que la tabla sepa pintar una.
+
+console.log('2. CRM');
+await page.goto(`${WEB}/clientes`, { waitUntil: 'networkidle' });
+await shot('10-clientes-vacio');
+
+await page.click('text=Nueva ficha');
+await page.waitForSelector('[role=dialog]');
+// Acotado al diálogo: fuera hay un buscador cuya etiqueta también dice "correo".
+const ficha = page.locator('[role=dialog]');
+await ficha.getByLabel('Nombre', { exact: true }).fill('Comercial Los Andes S.A.S.');
+await ficha.getByLabel('Razón social').fill('Comercial Los Andes S.A.S.');
+await ficha.getByLabel('Número', { exact: true }).fill('890.903.938');
+await ficha.getByLabel('Correo', { exact: true }).fill('compras@losandes.co');
+await shot('11-cliente-formulario');
+await page.click('[role=dialog] button:has-text("Crear")');
+await page.waitForURL(/\/clientes\/[0-9a-f-]{36}/, { timeout: 15000 });
+await shot('12-cliente-ficha');
+
+// El DV se calcula en el servidor: comprobar que llega a la pantalla verifica
+// el camino entero, no solo que la función pura funcione.
+const cabecera = await page.textContent('body');
+if (!cabecera.includes('890.903.938-8')) {
+  throw new Error('la ficha no muestra el NIT con su dígito de verificación');
+}
+// Nada de valores crudos del enum en pantalla: "COMUN" no es castellano.
+if (cabecera.includes('COMUN')) throw new Error('la ficha muestra el régimen sin traducir');
+
+for (const [name, pestana] of [
+  ['13-cliente-contactos', 'contactos'],
+  ['14-cliente-actividades', 'actividades'],
+]) {
+  await page.goto(`${page.url().split('?')[0]}?pestana=${pestana}`, { waitUntil: 'networkidle' });
+  await shot(name);
+}
+
+await page.goto(`${WEB}/clientes`, { waitUntil: 'networkidle' });
+await shot('15-clientes-listado');
+
+// ── Catálogo ────────────────────────────────────────────────────────────────
+
+console.log('3. Catálogo');
+await page.goto(`${WEB}/productos?nuevo=1`, { waitUntil: 'networkidle' });
+await page.waitForSelector('[role=dialog]');
+const formulario = page.locator('[role=dialog]');
+await formulario.getByLabel('Nombre', { exact: true }).fill('Gaseosa cola 1.5 L');
+await formulario.getByLabel('Precio de venta', { exact: true }).fill('4500');
+await formulario.getByLabel('Precio de compra', { exact: true }).fill('3200');
+await shot('16-producto-formulario');
+await page.click('[role=dialog] button:has-text("Crear")');
+await page.waitForURL(/\/productos\/[0-9a-f-]{36}/, { timeout: 15000 });
+await shot('17-producto-ficha');
+
+// El margen y el IVA por defecto se calculan en el servidor.
+const fichaProducto = await page.textContent('body');
+// El margen se escribe en es-CO: coma decimal, como el resto de cifras.
+if (!fichaProducto.includes('28,89')) throw new Error('la ficha no muestra el margen en formato es-CO');
+if (!fichaProducto.includes('19 %')) throw new Error('la ficha no muestra el IVA por defecto');
+if (fichaProducto.includes('AVERAGE')) throw new Error('la ficha muestra el método de costo sin traducir');
+
+await page.goto(`${page.url().split('?')[0]}?pestana=precios`, { waitUntil: 'networkidle' });
+await shot('18-producto-precios');
+
+for (const [name, path] of [
+  ['19-productos', '/productos'],
+  ['20-categorias', '/categorias'],
+  ['21-listas-precios', '/listas-de-precios'],
+  ['22-impuestos', '/impuestos'],
+  ['23-unidades', '/unidades'],
+  ['24-importaciones', '/importaciones'],
+]) {
+  console.log(`→ ${path}`);
+  await page.goto(`${WEB}${path}`, { waitUntil: 'networkidle' });
+  await shot(name);
+}
+
+// Los impuestos colombianos tienen que estar sembrados y legibles: "19 %" y no
+// "19.000000", que es como los devuelve la base sin normalizar.
+await page.goto(`${WEB}/impuestos`, { waitUntil: 'networkidle' });
+const impuestos = await page.textContent('body');
+for (const esperado of ['IVA19', 'INC8', 'ReteFuente', '19 %']) {
+  if (!impuestos.includes(esperado)) throw new Error(`la pantalla de impuestos no muestra ${esperado}`);
+}
+if (/\d+\.000000/.test(impuestos)) throw new Error('las tarifas salen sin normalizar (19.000000)');
+
 console.log('→ paleta de comandos');
 await page.keyboard.press('Control+k');
-await shot('07-paleta');
+await shot('25-paleta');
 await page.keyboard.press('Escape');
 
 console.log('→ modo oscuro');
 await page.evaluate(() => localStorage.setItem('erp.theme', 'dark'));
-await page.goto(`${WEB}/personas`, { waitUntil: 'networkidle' });
-await shot('08-oscuro');
+await page.goto(`${WEB}/productos`, { waitUntil: 'networkidle' });
+await shot('26-oscuro-productos');
+await page.goto(`${WEB}/clientes`, { waitUntil: 'networkidle' });
+await shot('27-oscuro-clientes');
 
 console.log('→ móvil 400px');
 await page.setViewportSize({ width: 400, height: 780 });
 await page.evaluate(() => localStorage.setItem('erp.theme', 'light'));
-await page.reload({ waitUntil: 'networkidle' });
-await shot('09-movil');
+await page.goto(`${WEB}/productos`, { waitUntil: 'networkidle' });
+await shot('28-movil-productos');
+await page.goto(`${WEB}/clientes`, { waitUntil: 'networkidle' });
+await shot('29-movil-clientes');
 
 console.log(errors.length ? `\n❌ ${errors.length} error(es) de consola:` : '\n✅ Sin errores de consola');
 errors.slice(0, 10).forEach((e) => console.log('   ', e.slice(0, 200)));
