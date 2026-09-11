@@ -1,0 +1,33 @@
+# Entorno de desarrollo para máquinas con Docker.
+# En sandboxes sin demonio Docker usa un clúster local: ver docs/DESARROLLO.md
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: erp_migrator
+      POSTGRES_PASSWORD: erp_migrator
+      POSTGRES_DB: erp_dev
+    ports: ['5432:5432']
+    volumes: ['pgdata:/var/lib/postgresql/data']
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U erp_migrator -d erp_dev']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports: ['1025:1025', '8025:8025']
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: erp
+      MINIO_ROOT_PASSWORD: erp-secret
+    ports: ['9000:9000', '9001:9001']
+    volumes: ['miniodata:/data']
+
+volumes:
+  pgdata:
+  miniodata:

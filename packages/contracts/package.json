@@ -1,0 +1,29 @@
+{
+  "name": "@erp/contracts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "lint": "eslint src tests --max-warnings=0",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "@erp/core": "workspace:*",
+    "zod": "^4.0.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2",
+    "vitest": "^3.0.5"
+  }
+}

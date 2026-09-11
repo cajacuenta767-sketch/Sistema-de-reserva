@@ -18,35 +18,35 @@ También puedes ejecutarlos por separado: `npm run dev:api` y `npm run dev:web`.
 
 ### Cuentas de demostración (contraseña `Reserva123!`)
 
-| Rol | Correo |
-| --- | --- |
-| Cliente | `paola@gmail.com` · `andres@gmail.com` |
+| Rol         | Correo                                                                                                 |
+| ----------- | ------------------------------------------------------------------------------------------------------ |
+| Cliente     | `paola@gmail.com` · `andres@gmail.com`                                                                 |
 | Profesional | `daniel@reservaflow.app` · `lulu@reservaflow.app` · `camila@reservaflow.app` · `mateo@reservaflow.app` |
-| Admin | `admin@reservaflow.app` |
+| Admin       | `admin@reservaflow.app`                                                                                |
 
 Cupones de prueba: `BIENVENIDO10` (10 %) y `HOGAR20K` ($20.000 en servicios de hogar).
 
 ## Scripts
 
-| Comando | Descripción |
-| --- | --- |
-| `npm run dev` | Backend + frontend en modo desarrollo |
-| `npm test` | Tests del backend (Vitest + Supertest) |
+| Comando         | Descripción                                                   |
+| --------------- | ------------------------------------------------------------- |
+| `npm run dev`   | Backend + frontend en modo desarrollo                         |
+| `npm test`      | Tests del backend (Vitest + Supertest)                        |
 | `npm run build` | Compila backend (`backend/dist`) y frontend (`frontend/dist`) |
-| `npm start` | Arranca la API compilada |
-| `npm run seed` | Siembra datos de demostración (idempotente) |
+| `npm start`     | Arranca la API compilada                                      |
+| `npm run seed`  | Siembra datos de demostración (idempotente)                   |
 
 ## Configuración
 
 Copia `backend/.env.example` a `backend/.env` y ajusta:
 
-| Variable | Descripción |
-| --- | --- |
-| `PORT` | Puerto de la API (4000) |
-| `DATABASE_PATH` | Ruta del archivo SQLite |
-| `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | Secretos de firma de tokens |
-| `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` | Vigencia de tokens (`15m`, `7d`) |
-| `CORS_ORIGIN` | Orígenes permitidos separados por coma |
+| Variable                                   | Descripción                            |
+| ------------------------------------------ | -------------------------------------- |
+| `PORT`                                     | Puerto de la API (4000)                |
+| `DATABASE_PATH`                            | Ruta del archivo SQLite                |
+| `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | Secretos de firma de tokens            |
+| `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL`       | Vigencia de tokens (`15m`, `7d`)       |
+| `CORS_ORIGIN`                              | Orígenes permitidos separados por coma |
 
 El frontend usa el proxy de Vite hacia `/api`. En producción define `VITE_API_URL` (por ejemplo `https://api.midominio.com/api/v1`).
 
