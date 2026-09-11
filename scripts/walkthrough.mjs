@@ -148,6 +148,68 @@ for (const esperado of ['IVA19', 'INC8', 'ReteFuente', '19 %']) {
 }
 if (/\d+\.000000/.test(impuestos)) throw new Error('las tarifas salen sin normalizar (19.000000)');
 
+// ── Ventas ──────────────────────────────────────────────────────────────────
+//
+// El recorrido completo, por la interfaz: facturar, emitir y cobrar. Lo que se
+// comprueba son las cifras que calcula el servidor, no que las pantallas pinten.
+
+console.log('4. Ventas');
+await page.goto(`${WEB}/facturas/nueva`, { waitUntil: 'networkidle' });
+
+await page.getByLabel('Cliente', { exact: true }).fill('Comercial');
+await page.waitForSelector('button:has-text("Comercial Los Andes")');
+await page.click('button:has-text("Comercial Los Andes")');
+
+await page.getByLabel('Concepto o producto').fill('Gaseosa');
+await page.waitForSelector('button:has-text("Gaseosa cola")');
+await page.click('button:has-text("Gaseosa cola")');
+await page.getByLabel('Cantidad').first().fill('10');
+await shot('30-factura-borrador');
+
+await page.click('button:has-text("Guardar borrador")');
+await page.waitForURL(/\/facturas\/[0-9a-f-]{36}$/, { timeout: 15000 });
+await shot('31-factura-ficha');
+
+// 10 × 4.500 = 45.000 de base, IVA 19 % = 8.550, total 53.550. Lo calcula el
+// servidor: si la pantalla mostrara otra cosa, este recorrido lo diría.
+const factura = await page.textContent('body');
+for (const esperado of ['45.000', '8.550', '53.550', 'Borrador']) {
+  if (!factura.includes(esperado)) {
+    throw new Error(`la ficha de la factura no muestra ${esperado}`);
+  }
+}
+
+console.log('→ emitir');
+await page.click('button:has-text("Emitir")');
+await page.waitForSelector('text=/FV-\\d{6}/', { timeout: 15000 });
+await shot('32-factura-emitida');
+
+const emitida = await page.textContent('body');
+if (!/FV-\d{6}/.test(emitida)) throw new Error('la factura emitida no muestra su consecutivo');
+if (!emitida.includes('Emitida')) throw new Error('la factura emitida no aparece como emitida');
+
+console.log('→ cobrar');
+await page.click('button:has-text("Registrar cobro")');
+await page.waitForSelector('[role=dialog]');
+await shot('33-cobro');
+await page.click('[role=dialog] button:has-text("Registrar")');
+await page.waitForSelector('text=Pagada', { timeout: 15000 });
+await shot('34-factura-pagada');
+
+const pagada = await page.textContent('body');
+if (!pagada.includes('Pagada')) throw new Error('la factura cobrada no figura como pagada');
+
+for (const [name, path] of [
+  ['35-facturas', '/facturas'],
+  ['36-cotizaciones', '/cotizaciones'],
+  ['37-cobros', '/cobros'],
+  ['38-cartera', '/cartera'],
+]) {
+  console.log(`→ ${path}`);
+  await page.goto(`${WEB}${path}`, { waitUntil: 'networkidle' });
+  await shot(name);
+}
+
 console.log('→ paleta de comandos');
 await page.keyboard.press('Control+k');
 await shot('25-paleta');
@@ -159,6 +221,8 @@ await page.goto(`${WEB}/productos`, { waitUntil: 'networkidle' });
 await shot('26-oscuro-productos');
 await page.goto(`${WEB}/clientes`, { waitUntil: 'networkidle' });
 await shot('27-oscuro-clientes');
+await page.goto(`${WEB}/facturas`, { waitUntil: 'networkidle' });
+await shot('39-oscuro-facturas');
 
 console.log('→ móvil 400px');
 await page.setViewportSize({ width: 400, height: 780 });
@@ -167,6 +231,8 @@ await page.goto(`${WEB}/productos`, { waitUntil: 'networkidle' });
 await shot('28-movil-productos');
 await page.goto(`${WEB}/clientes`, { waitUntil: 'networkidle' });
 await shot('29-movil-clientes');
+await page.goto(`${WEB}/facturas`, { waitUntil: 'networkidle' });
+await shot('40-movil-facturas');
 
 console.log(errors.length ? `\n❌ ${errors.length} error(es) de consola:` : '\n✅ Sin errores de consola');
 errors.slice(0, 10).forEach((e) => console.log('   ', e.slice(0, 200)));
