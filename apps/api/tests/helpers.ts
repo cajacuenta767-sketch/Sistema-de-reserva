@@ -6,7 +6,7 @@ import { loadEnv, type Env } from '../src/config/env.js';
 import { createApp } from '../src/bootstrap/app.js';
 import { buildContainer, type Container } from '../src/platform/modules/container.js';
 import { createPool } from '../src/platform/db/client.js';
-import { withoutTenant } from '../src/platform/db/tenancy.js';
+import { withTenant, withoutTenant } from '../src/platform/db/tenancy.js';
 import { modules } from '../src/modules/index.js';
 import { createTestDatabase, type TestDatabase } from './setup/pgTemplate.js';
 
@@ -73,6 +73,31 @@ export const makeTestApp = async (): Promise<TestApp> => {
     },
   };
 };
+
+// ── Inspección de la base ────────────────────────────────────────────────────
+
+/**
+ * Ejecuta una consulta cruda como si fuera una petición de esa cuenta.
+ *
+ * Consultar con el pool a pelo no sirve para comprobar nada: las políticas RLS
+ * están FORZADAS, así que una conexión sin `app.organization_id` no ve ninguna
+ * fila y cualquier `count(*)` da cero. Un test que afirme "la fila ya no está"
+ * sobre esa conexión pasa siempre, incluso si la fila sigue ahí.
+ */
+export const asTenant = async <T>(
+  t: TestApp,
+  account: Account,
+  fn: (client: import('pg').PoolClient) => Promise<T>,
+): Promise<T> =>
+  withTenant(
+    t.container.pool,
+    {
+      organizationId: account.organizationId,
+      membershipId: account.membershipId,
+      userId: account.userId,
+    },
+    (tx) => fn(tx.client),
+  );
 
 // ── Utilidades de sesión ─────────────────────────────────────────────────────
 

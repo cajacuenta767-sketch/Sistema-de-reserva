@@ -1,6 +1,17 @@
 import pg from 'pg';
+import { config as loadDotenv } from 'dotenv';
 import { randomBytes } from 'node:crypto';
 import { grantAppPrivileges, migrate, resetSchema, roleFromUrl } from '../../src/platform/db/migrator.js';
+
+// `globalSetup` corre en el proceso principal de vitest y los ficheros de test
+// en procesos hijos. Los hijos cargan `.env` sin querer, por el efecto de
+// importar `src/config/env.ts`; el principal no importa nada de eso. Sin esta
+// línea las dos mitades leían URLs distintas: la plantilla se migraba y se
+// concedía para un rol, y los tests se conectaban con otro. El síntoma era
+// `relation "permissions" does not exist`, porque PostgreSQL oculta las tablas
+// de un esquema sobre el que el rol no tiene USAGE en vez de decir que le falta
+// el permiso.
+loadDotenv();
 
 /**
  * Aislamiento de los tests de integración con bases de datos plantilla.
@@ -32,13 +43,51 @@ const baseUrl = (): string =>
 
 const appRole = (): string | null => roleFromUrl(process.env.DATABASE_URL ?? '');
 
-/** Prepara la plantilla una sola vez para toda la ejecución de los tests. */
+/**
+ * Prepara la plantilla una sola vez para toda la ejecución de los tests.
+ *
+ * Al final comprueba que el rol de aplicación ve de verdad las tablas. Es una
+ * afirmación aparentemente redundante sobre código que acaba de ejecutarse, pero
+ * cubre el único fallo de esta pieza que no se manifiesta aquí: si la plantilla
+ * queda sin conceder, los tests fallan mucho después con un error que no
+ * menciona ni permisos ni plantillas.
+ */
 export const prepareTemplate = async (): Promise<void> => {
   const url = adminUrl(baseUrl(), TEMPLATE_DB);
   await resetSchema(url);
   await migrate(url);
   const role = appRole();
   if (role) await grantAppPrivileges(url, role);
+  await assertTemplateUsable(url, role);
+};
+
+/** Falla con un mensaje que dice qué arreglar, no con uno que haya que investigar. */
+const assertTemplateUsable = async (migrationUrl: string, role: string | null): Promise<void> => {
+  const client = new pg.Client({ connectionString: migrationUrl });
+  await client.connect();
+  try {
+    const { rows } = await client.query<{ tables: string; usage: boolean | null; readable: boolean | null }>(
+      `SELECT (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public') AS tables,
+              CASE WHEN $1::text IS NULL THEN NULL
+                   ELSE has_schema_privilege($1, 'public', 'USAGE') END AS usage,
+              CASE WHEN $1::text IS NULL OR to_regclass('public.permissions') IS NULL THEN NULL
+                   ELSE has_table_privilege($1, 'public.permissions', 'SELECT') END AS readable`,
+      [role],
+    );
+    const row = rows[0];
+    if (!row || Number(row.tables) === 0) {
+      throw new Error(`La plantilla ${TEMPLATE_DB} quedó vacía: las migraciones no se aplicaron.`);
+    }
+    if (role && (row.usage !== true || row.readable !== true)) {
+      throw new Error(
+        `La plantilla ${TEMPLATE_DB} está migrada pero el rol "${role}" no puede leerla. ` +
+          `Comprueba que DATABASE_URL y DATABASE_MIGRATION_URL apunten al mismo servidor ` +
+          `y que el rol "${role}" exista.`,
+      );
+    }
+  } finally {
+    await client.end();
+  }
 };
 
 const withAdmin = async <T>(fn: (client: pg.Client) => Promise<T>): Promise<T> => {

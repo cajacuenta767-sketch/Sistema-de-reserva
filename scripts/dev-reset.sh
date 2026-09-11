@@ -10,6 +10,9 @@ cd "$(dirname "$0")/.."
 
 pg_isready >/dev/null 2>&1 || pg_ctlcluster 16 main start
 
+# .env está en .gitignore, así que en una copia limpia del repo no existe.
+[ -f apps/api/.env ] || cp .env.example apps/api/.env
+
 if [ -f /tmp/claude-0/api.pid ]; then kill "$(cat /tmp/claude-0/api.pid)" 2>/dev/null || true; fi
 sleep 1
 
