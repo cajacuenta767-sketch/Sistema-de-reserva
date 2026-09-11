@@ -163,6 +163,25 @@ const applyScope = (b: Builder, spec: ListSpec, scope: ScopeFilter): void => {
 const buildWhere = (spec: ListSpec, query: ListQuery, scope: ScopeFilter): Builder => {
   const b: Builder = { where: [...(spec.baseWhere ?? [])], params: [...(spec.baseParams ?? [])] };
 
+  /*
+   * Cada parámetro base se ANCLA al WHERE con una condición trivialmente cierta.
+   *
+   * `runList` lanza tres consultas —filas, conteo y agregados— con la MISMA
+   * lista de parámetros, pero cada una arma su SQL con partes distintas: el
+   * conteo solo usa `from` y `where`. Un parámetro base que solo aparezca en
+   * `select` o en `aggregates` llega a la consulta de conteo sin que su texto lo
+   * mencione, y PostgreSQL rechaza la consulta entera. El síntoma es un 500 que
+   * aparece solo con ciertos filtros, que es de lo más difícil de rastrear.
+   *
+   * Anclarlos aquí cuesta una comparación constante por consulta y permite
+   * usarlos en cualquier parte del `ListSpec`, que es donde hacen falta: la
+   * fecha con la que se decide si una factura está vencida se necesita en el
+   * SELECT, en los filtros y en los agregados.
+   */
+  for (let i = 0; i < b.params.length; i += 1) {
+    b.where.push(`$${i + 1}::text IS NOT NULL`);
+  }
+
   for (const clause of query.filters) {
     const field = spec.fields[clause.field];
     if (!field || field.filterable === false) {

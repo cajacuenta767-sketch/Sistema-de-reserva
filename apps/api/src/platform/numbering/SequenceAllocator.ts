@@ -37,9 +37,22 @@ export class SequenceAllocator {
   /** `at` es la fecha del DOCUMENTO, no la del reloj: el consecutivo de una
    *  factura de enero pertenece a enero aunque se registre en febrero. */
   async next(tx: Tx, key: SequenceKey, at: Date): Promise<AllocatedNumber> {
-    const prefix = key.prefix ?? '';
     const branchId = key.branchId ?? null;
 
+    /*
+     * Selección de la numeración, en dos ejes:
+     *
+     * · **Prefijo.** Quien pide un número nombra el TIPO de documento, no su
+     *   prefijo: el prefijo es configuración y vive en la tabla. Exigírselo al
+     *   código lo obligaría a repetir un dato que un administrador puede cambiar
+     *   desde la pantalla, y el día que lo cambiara dejaría de emitirse. Solo se
+     *   filtra por prefijo cuando el llamante pide uno concreto, que es el caso
+     *   de una empresa con dos resoluciones DIAN a la vez.
+     *
+     * · **Sucursal.** Gana la numeración propia de la sucursal si existe, y si
+     *   no se usa la de la empresa. La mayoría lleva un solo consecutivo; quien
+     *   necesita uno por establecimiento lo crea y pasa a usarse solo.
+     */
     const { rows } = await tx.client.query<{
       id: string;
       next_number: string;
@@ -49,22 +62,28 @@ export class SequenceAllocator {
       range_from: string | null;
       range_to: string | null;
       is_active: boolean;
+      prefix: string;
     }>(
-      `SELECT id, next_number, padding, period_scope, period_key, range_from, range_to, is_active
+      `SELECT id, prefix, next_number, padding, period_scope, period_key, range_from, range_to, is_active
          FROM document_sequences
-        WHERE organization_id = $1 AND doc_type = $2 AND prefix = $3
-          AND COALESCE(branch_id, '00000000-0000-0000-0000-000000000000'::uuid)
-              = COALESCE($4::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+        WHERE organization_id = $1 AND doc_type = $2
+          AND ($3::text IS NULL OR prefix = $3)
+          AND (branch_id IS NULL OR branch_id = $4::uuid)
+        ORDER BY (branch_id IS NOT NULL) DESC, prefix
+        LIMIT 1
         FOR UPDATE`,
-      [key.organizationId, key.docType, prefix, branchId],
+      [key.organizationId, key.docType, key.prefix ?? null, branchId],
     );
 
     const seq = rows[0];
     if (!seq) {
       throw AppError.rule(
-        `No hay una numeración configurada para "${key.docType}"${prefix ? ` con prefijo "${prefix}"` : ''}`,
+        `No hay una numeración configurada para "${key.docType}"` +
+          (key.prefix ? ` con prefijo "${key.prefix}"` : ''),
       );
     }
+    // El prefijo sale de la fila elegida, no de quien pide el número.
+    const prefix = seq.prefix;
     if (!seq.is_active) {
       throw AppError.rule(`La numeración de "${key.docType}" está desactivada`);
     }

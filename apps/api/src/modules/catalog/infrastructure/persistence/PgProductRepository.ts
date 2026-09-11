@@ -4,6 +4,7 @@ import type { ScopeFilter } from '../../../../platform/authz/scope.js';
 import { runList, type ListResult, type ListSpec } from '../../../../platform/http/list.js';
 import type { Product, ProductVariant } from '../../domain/Product.js';
 import type {
+  ProductForDocument,
   ProductOverview,
   ProductRepository,
   ProductRow,
@@ -246,6 +247,57 @@ export class PgProductRepository implements ProductRepository {
       [organizationId, `%${term}%`, term, limit],
     );
     return rows;
+  }
+
+  /** Una sola consulta para todos los productos de un documento. */
+  async forDocument(
+    tx: Tx,
+    organizationId: string,
+    ids: readonly string[],
+  ): Promise<ProductForDocument[]> {
+    if (ids.length === 0) return [];
+    const { rows } = await tx.client.query<Record<string, string | boolean | null>>(
+      `SELECT p.id, p.sku, p.name, p.sale_price::text AS sale_price,
+              p.purchase_price::text AS purchase_price, p.currency_code, p.price_includes_tax,
+              um.code AS uom_code,
+              st.id AS sale_tax_id, st.code AS sale_tax_code, st.kind AS sale_tax_kind,
+              trim_scale(st.rate)::text AS sale_tax_rate,
+              pt.id AS purchase_tax_id, pt.code AS purchase_tax_code, pt.kind AS purchase_tax_kind,
+              trim_scale(pt.rate)::text AS purchase_tax_rate
+         FROM products p
+         JOIN uoms um ON um.id = p.uom_id
+         LEFT JOIN taxes st ON st.id = p.sale_tax_id
+         LEFT JOIN taxes pt ON pt.id = p.purchase_tax_id
+        WHERE p.organization_id = $1 AND p.id = ANY($2::uuid[]) AND p.deleted_at IS NULL`,
+      [organizationId, ids],
+    );
+
+    return rows.map((r) => ({
+      id: String(r.id),
+      sku: String(r.sku),
+      name: String(r.name),
+      uomCode: String(r.uom_code),
+      salePrice: String(r.sale_price),
+      purchasePrice: String(r.purchase_price),
+      currencyCode: String(r.currency_code),
+      priceIncludesTax: Boolean(r.price_includes_tax),
+      saleTax: r.sale_tax_id
+        ? {
+            id: String(r.sale_tax_id),
+            code: String(r.sale_tax_code),
+            kind: String(r.sale_tax_kind),
+            rate: String(r.sale_tax_rate),
+          }
+        : null,
+      purchaseTax: r.purchase_tax_id
+        ? {
+            id: String(r.purchase_tax_id),
+            code: String(r.purchase_tax_code),
+            kind: String(r.purchase_tax_kind),
+            rate: String(r.purchase_tax_rate),
+          }
+        : null,
+    }));
   }
 
   async overview(tx: Tx, organizationId: string, scope: ScopeFilter): Promise<ProductOverview> {

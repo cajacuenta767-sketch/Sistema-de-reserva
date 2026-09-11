@@ -18,6 +18,7 @@ import { marginPercent } from '../../domain/Pricing.js';
 import { DEFAULT_SALE_TAX_CODE } from '../../domain/ColombianTaxes.js';
 import type {
   CategoryRepository,
+  ProductForDocument,
   ProductOverview,
   ProductRepository,
   ProductRow,
@@ -389,6 +390,19 @@ export class ProductUseCases {
     limit: number,
   ): Promise<Array<{ id: string; sku: string; name: string; sale_price: string }>> {
     return this.products.search(tx, ctx.organizationId, term, limit);
+  }
+
+  /**
+   * Datos de varios productos para las líneas de un documento.
+   *
+   * La usa el módulo de ventas al componer una factura: pide todos sus productos
+   * de una vez en lugar de uno por línea. Sin permiso de lectura del catálogo no
+   * se puede facturar, que es coherente: quien no ve los productos no puede
+   * elegir cuáles vende.
+   */
+  async forDocument(ctx: RequestContext, tx: Tx, ids: readonly string[]): Promise<ProductForDocument[]> {
+    assertCan(ctx, 'catalog:product:read');
+    return this.products.forDocument(tx, ctx.organizationId, ids);
   }
 
   // ── Apoyo ─────────────────────────────────────────────────────────────────

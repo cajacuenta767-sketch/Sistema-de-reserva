@@ -43,6 +43,29 @@ export interface ProductRepository {
     limit: number,
   ): Promise<Array<{ id: string; sku: string; name: string; sale_price: string }>>;
   overview(tx: Tx, organizationId: string, scope: ScopeFilter): Promise<ProductOverview>;
+  /** Datos de varios productos para las líneas de un documento, en una consulta. */
+  forDocument(tx: Tx, organizationId: string, ids: readonly string[]): Promise<ProductForDocument[]>;
+}
+
+/**
+ * Lo que una línea de documento necesita de un producto, resuelto en UNA
+ * consulta para todos los productos del documento.
+ *
+ * Pedirlo producto a producto haría cinco consultas por línea: una factura de
+ * veinte líneas son cien viajes a la base para pintar un documento. El guardia
+ * anti-N+1 de los tests transversales existe justo para esto.
+ */
+export interface ProductForDocument {
+  id: string;
+  sku: string;
+  name: string;
+  uomCode: string;
+  salePrice: string;
+  purchasePrice: string;
+  currencyCode: string;
+  priceIncludesTax: boolean;
+  saleTax: { id: string; code: string; kind: string; rate: string } | null;
+  purchaseTax: { id: string; code: string; kind: string; rate: string } | null;
 }
 
 export interface ProductOverview {
