@@ -57,6 +57,7 @@ export const tokensSchema = z.object({
   accessToken: z.string(),
   refreshToken: z.string(),
   expiresIn: z.number().int(),
+  refreshTokenId: z.string().optional(),
 });
 export type Tokens = z.infer<typeof tokensSchema>;
 
