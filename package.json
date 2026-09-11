@@ -1,0 +1,17 @@
+{
+  "name": "reservaflow",
+  "private": true,
+  "version": "1.0.0",
+  "description": "ReservaFlow · Sistema de reservas completo (backend hexagonal + frontend React)",
+  "workspaces": ["backend", "frontend"],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "dev:api": "npm run dev -w backend",
+    "dev:web": "npm run dev -w frontend",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "seed": "npm run seed -w backend",
+    "start": "npm run start -w backend"
+  },
+  "engines": { "node": ">=22.13" }
+}
