@@ -44,6 +44,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Ningún fichero fuente fuera del repositorio
+        # Antes que nada: si falta código, el resto de pasos fallan con errores
+        # que no apuntan a la causa.
+        run: ./scripts/check-tracked.sh
+
       - run: pnpm install --frozen-lockfile
 
       - name: Crear el rol de aplicación
