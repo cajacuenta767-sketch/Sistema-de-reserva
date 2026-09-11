@@ -19,6 +19,30 @@ afterAll(async () => {
   await t.close();
 });
 
+/*
+ * El buscador de productos alimenta el selector de líneas de CUALQUIER
+ * documento —facturas de venta y órdenes de compra—, así que tiene que traer
+ * los dos precios. Cuando solo devolvía el de venta, elegir un producto en una
+ * orden de compra dejaba el precio en `undefined` y tumbaba la pantalla entera
+ * con un error que no decía qué faltaba.
+ */
+describe('buscador de productos', () => {
+  it('devuelve el precio de venta Y el de compra', async () => {
+    await owner
+      .as('post', '/api/v1/products')
+      .send({ name: 'Termo de acero', sku: 'TERMO-01', salePrice: '95000', purchasePrice: '60000' })
+      .expect(201);
+
+    const { body } = await owner.as('get', '/api/v1/products/search?q=Termo').expect(200);
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0]).toMatchObject({
+      name: 'Termo de acero',
+      sale_price: '95000.0000',
+      purchase_price: '60000.0000',
+    });
+  });
+});
+
 describe('siembra al crear la empresa', () => {
   it('deja unidades, impuestos, categorías y una lista de precios listas para usar', async () => {
     // Una empresa recién creada tiene que poder registrar un producto sin pasar

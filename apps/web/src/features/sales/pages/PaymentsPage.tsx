@@ -120,7 +120,10 @@ export function PaymentsPage() {
         searchPlaceholder="Buscar por recibo, cliente o referencia…"
         emptyTitle="Sin cobros registrados"
         emptyDescription="Registra el dinero que recibes para que la cartera refleje la realidad."
-        aggregateLabels={{ total_amount: 'Total cobrado', unapplied_amount: 'Sin imputar' }}
+        aggregateLabels={{
+          total_amount: { label: 'Total cobrado', as: 'money' },
+          unapplied_amount: { label: 'Sin imputar', as: 'money' },
+        }}
         filters={
           <Select
             value={(table.state.filters.find((f) => f.field === 'method')?.value as string | undefined) ?? ''}

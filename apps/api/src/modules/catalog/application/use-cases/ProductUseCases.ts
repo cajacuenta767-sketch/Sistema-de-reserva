@@ -21,6 +21,7 @@ import type {
   ProductForDocument,
   ProductOverview,
   ProductRepository,
+  ProductSearchHit,
   ProductRow,
   TaxRepository,
   TaxRow,
@@ -399,7 +400,7 @@ export class ProductUseCases {
     tx: Tx,
     term: string,
     limit: number,
-  ): Promise<Array<{ id: string; sku: string; name: string; sale_price: string }>> {
+  ): Promise<ProductSearchHit[]> {
     return this.products.search(tx, ctx.organizationId, term, limit);
   }
 

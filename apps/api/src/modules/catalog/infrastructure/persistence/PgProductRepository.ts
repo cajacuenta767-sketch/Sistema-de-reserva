@@ -233,14 +233,31 @@ export class PgProductRepository implements ProductRepository {
     return Number(rows[0]?.total ?? 0) + 1;
   }
 
+  /**
+   * Búsqueda para el selector de líneas de cualquier documento.
+   *
+   * Devuelve los DOS precios. El mismo selector se usa para vender y para
+   * comprar, y omitir el precio de compra obligaba a quien compra a escribirlo
+   * a mano teniendo el dato guardado.
+   */
   async search(
     tx: Tx,
     organizationId: string,
     term: string,
     limit: number,
-  ): Promise<Array<{ id: string; sku: string; name: string; sale_price: string }>> {
-    const { rows } = await tx.client.query<{ id: string; sku: string; name: string; sale_price: string }>(
-      `SELECT id, sku, name, sale_price::text AS sale_price FROM products
+  ): Promise<
+    Array<{ id: string; sku: string; name: string; sale_price: string; purchase_price: string }>
+  > {
+    const { rows } = await tx.client.query<{
+      id: string;
+      sku: string;
+      name: string;
+      sale_price: string;
+      purchase_price: string;
+    }>(
+      `SELECT id, sku, name, sale_price::text AS sale_price,
+              purchase_price::text AS purchase_price
+         FROM products
         WHERE organization_id = $1 AND deleted_at IS NULL
           AND (name ILIKE $2 OR sku ILIKE $2 OR barcode = $3)
         ORDER BY name LIMIT $4`,

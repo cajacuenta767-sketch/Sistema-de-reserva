@@ -31,6 +31,7 @@ interface ProductHit {
   sku: string;
   name: string;
   sale_price: string;
+  purchase_price: string;
 }
 
 export const emptyLine = (): EditableLine => ({
@@ -58,16 +59,33 @@ export function LineEditor({
   currency,
   onChange,
   disabled,
+  mode = 'SALE',
 }: {
   lines: EditableLine[];
   currency: string;
   onChange: (lines: EditableLine[]) => void;
   disabled?: boolean;
+  /**
+   * Qué documento se está editando.
+   *
+   * Cambia el precio que se propone al elegir un producto y los impuestos que
+   * se ofrecen. Es el MISMO editor a propósito: una copia para comprar
+   * divergiría de la de vender en el primer arreglo, y el usuario aprendería
+   * dos formas de escribir líneas que se parecen pero no son iguales.
+   */
+  mode?: 'SALE' | 'PURCHASE';
 }) {
+  const buying = mode === 'PURCHASE';
   const taxes = useCollection<Tax>('/taxes');
   const saleTaxes = useMemo(
-    () => taxes.data?.items.filter((t) => !t.is_withholding && t.applies_to !== 'PURCHASE' && t.is_active) ?? [],
-    [taxes.data],
+    () =>
+      taxes.data?.items.filter(
+        (t) =>
+          !t.is_withholding &&
+          t.applies_to !== (buying ? 'SALE' : 'PURCHASE') &&
+          t.is_active,
+      ) ?? [],
+    [taxes.data, buying],
   );
 
   const update = (key: string, patch: Partial<EditableLine>) =>
@@ -98,12 +116,19 @@ export function LineEditor({
                     value={line.description}
                     sku={line.sku}
                     disabled={disabled}
+                    priceOf={(hit) => (buying ? hit.purchase_price : hit.sale_price)}
                     onPick={(hit) =>
                       update(line.key, {
                         productId: hit.id,
                         description: hit.name,
                         sku: hit.sku,
-                        unitPrice: line.unitPrice || hit.sale_price,
+                        // `?? ''` y no a secas: si el endpoint dejara de
+                        // devolver el precio, la línea se queda vacía y se
+                        // escribe a mano, en vez de tumbar toda la pantalla
+                        // con un error que no dice qué falta.
+                        unitPrice:
+                          line.unitPrice ||
+                          (buying ? (hit.purchase_price ?? '') : (hit.sale_price ?? '')),
                       })
                     }
                     onText={(text) => update(line.key, { description: text, productId: null, sku: null })}
@@ -211,12 +236,15 @@ function ProductPicker({
   disabled,
   onPick,
   onText,
+  priceOf,
 }: {
   value: string;
   sku: string | null;
   disabled?: boolean;
   onPick: (hit: ProductHit) => void;
   onText: (text: string) => void;
+  /** Qué precio se enseña en la lista: el de venta o el de compra. */
+  priceOf: (hit: ProductHit) => string;
 }) {
   const [term, setTerm] = useState('');
   const [open, setOpen] = useState(false);
@@ -294,7 +322,9 @@ function ProductPicker({
                   <span className="block truncate">{hit.name}</span>
                   <span className="block font-mono text-xs text-fg-subtle">{hit.sku}</span>
                 </span>
-                <span className="shrink-0 tabular-nums text-fg-muted">{amount(hit.sale_price, 0)}</span>
+                <span className="shrink-0 tabular-nums text-fg-muted">
+                  {amount(priceOf(hit), 0)}
+                </span>
               </button>
             </li>
           ))}

@@ -27,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from '../primitives/overlays.jsx';
 import type { TableState } from '@/lib/url/useTableState';
+import { amount, money } from '@/lib/format';
 import type { Paged } from '@/lib/api/useList';
 
 /**
@@ -69,6 +70,12 @@ export interface BulkAction<T> {
   onRun: (rows: T[]) => void | Promise<void>;
 }
 
+export interface AggregateLabel {
+  label: string;
+  /** `number` es el defecto: cuenta o cantidad, sin símbolo. */
+  as?: 'number' | 'money';
+}
+
 export interface RowAction<T> {
   label: string;
   icon?: ReactNode;
@@ -93,8 +100,15 @@ export interface DataTableProps<T> {
   /** Controles de filtro específicos del módulo, sobre la tabla. */
   filters?: ReactNode;
   searchPlaceholder?: string;
-  /** Pie con totales calculados por el servidor. */
-  aggregateLabels?: Record<string, string>;
+  /**
+   * Pie con totales calculados por el servidor.
+   *
+   * El formato lo declara quien llama porque el dato no lo dice: del servidor
+   * llegan cadenas como `128000.0000` y `40.000000`, y una es dinero y la otra
+   * unidades. Sin declararlo, el pie enseñaba el número en crudo —con todos sus
+   * ceros— justo debajo de una columna que sí estaba formateada.
+   */
+  aggregateLabels?: Record<string, string | AggregateLabel>;
   emptyTitle?: string;
   emptyDescription?: string;
   emptyAction?: ReactNode;
@@ -449,12 +463,23 @@ export function DataTable<T>({
                   <tr className="border-t border-border bg-surface-2 font-medium">
                     <td colSpan={visible.length + (selectable ? 1 : 0) + (rowActions.length ? 1 : 0)}>
                       <div className="flex flex-wrap gap-4 px-3 py-2 text-xs">
-                        {Object.entries(aggregateLabels).map(([key, label]) => (
-                          <span key={key} className="text-fg-muted">
-                            {label}:{' '}
-                            <span className="tabular text-fg">{String(data.aggregates?.[key] ?? '—')}</span>
-                          </span>
-                        ))}
+                        {Object.entries(aggregateLabels).map(([key, spec]) => {
+                          const { label, as = 'number' } =
+                            typeof spec === 'string' ? { label: spec, as: 'number' as const } : spec;
+                          const raw = data.aggregates?.[key];
+                          return (
+                            <span key={key} className="text-fg-muted">
+                              {label}:{' '}
+                              <span className="tabular text-fg">
+                                {raw === undefined || raw === null
+                                  ? '—'
+                                  : as === 'money'
+                                    ? money(String(raw))
+                                    : amount(String(raw), 0)}
+                              </span>
+                            </span>
+                          );
+                        })}
                       </div>
                     </td>
                   </tr>

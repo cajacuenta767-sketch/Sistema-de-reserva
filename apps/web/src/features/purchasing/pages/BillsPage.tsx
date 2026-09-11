@@ -1,40 +1,39 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertTriangle, FileText, Plus, TrendingUp, Wallet } from 'lucide-react';
+import { AlertTriangle, FileText, Plus, Wallet } from 'lucide-react';
 import { Badge, Button, PageHeader, Select, StatTile } from '@/design-system';
 import { DataTable, type Column } from '@/design-system/data/DataTable';
 import { useTableState } from '@/lib/url/useTableState';
 import { useList, useResource } from '@/lib/api/useList';
 import { Can, useCan } from '@/lib/authz/useCan';
 import { dateShort, money, number } from '@/lib/format';
-import { INVOICE_STATUS } from '../lib/labels';
-import type { InvoiceRow, SalesOverview } from '../lib/types';
+import { BILL_STATUS } from '../lib/labels';
+import type { BillRow, PurchasingOverview } from '../lib/types';
 
-export function InvoicesPage() {
-  const table = useTableState({ defaultSort: [{ field: 'issue_date', dir: 'desc' }] });
+export function BillsPage() {
+  const table = useTableState({ defaultSort: [{ field: 'due_date', dir: 'asc' }] });
   const can = useCan();
   const navigate = useNavigate();
+  const query = useList<BillRow>('/purchasing/bills', table.toQuery());
+  const overview = useResource<PurchasingOverview>('/purchasing/overview');
 
-  const query = useList<InvoiceRow>('/invoices', table.toQuery());
-  const overview = useResource<SalesOverview>('/invoices/overview');
-
-  const columns = useMemo<Column<InvoiceRow>[]>(
+  const columns = useMemo<Column<BillRow>[]>(
     () => [
       {
-        id: 'number',
-        header: 'Número',
+        id: 'supplier_number',
+        header: 'Nº del proveedor',
         sortable: true,
         primary: true,
-        cell: (row) =>
-          row.number ? (
-            <span className="font-mono text-xs">{row.number}</span>
-          ) : (
-            <span className="text-fg-subtle">Borrador</span>
-          ),
+        cell: (row) => (
+          <div className="min-w-0">
+            <div className="font-mono text-xs">{row.supplier_number}</div>
+            {row.number && <div className="text-xs text-fg-subtle">Interno {row.number}</div>}
+          </div>
+        ),
       },
       {
         id: 'party_name',
-        header: 'Cliente',
+        header: 'Proveedor',
         sortable: true,
         cell: (row) => (
           <div className="min-w-0">
@@ -62,10 +61,10 @@ export function InvoicesPage() {
         header: 'Estado',
         sortable: true,
         cell: (row) => {
-          const status = INVOICE_STATUS[row.effective_status];
+          const status = BILL_STATUS[row.effective_status];
           return (
-            <Badge tone={status.tone} dot>
-              {status.label}
+            <Badge tone={status?.tone ?? 'neutral'} dot>
+              {status?.label ?? row.effective_status}
             </Badge>
           );
         },
@@ -89,13 +88,6 @@ export function InvoicesPage() {
             <span className="text-fg-subtle">—</span>
           ),
       },
-      {
-        id: 'party_tax_id',
-        header: 'NIT',
-        sortable: false,
-        hiddenByDefault: true,
-        cell: (row) => row.party_tax_id ?? '—',
-      },
     ],
     [],
   );
@@ -106,42 +98,40 @@ export function InvoicesPage() {
   return (
     <>
       <PageHeader
-        title="Facturas de venta"
-        description="Lo que has facturado y lo que te deben"
+        title="Facturas de proveedor"
+        description="Lo que te cobran y lo que debes"
         actions={
-          <Can perm="sales:invoice:create">
-            <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => navigate('/facturas/nueva')}>
-              Nueva factura
+          <Can perm="purchasing:bill:create">
+            <Button
+              variant="primary"
+              icon={<Plus className="size-4" />}
+              onClick={() => navigate('/compras/facturas/nueva')}
+            >
+              Registrar factura
             </Button>
           </Can>
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-3">
         <StatTile
-          label="Facturado este mes"
-          value={money(overview.data?.issuedThisMonth ?? '0')}
-          icon={<TrendingUp className="size-5" />}
-          tone="accent"
-        />
-        <StatTile
-          label="Cobrado este mes"
-          value={money(overview.data?.collectedThisMonth ?? '0')}
+          label="Total por pagar"
+          value={money(overview.data?.payable ?? '0')}
           icon={<Wallet className="size-5" />}
-          tone="success"
-        />
-        <StatTile
-          label="Cartera pendiente"
-          value={money(overview.data?.outstanding ?? '0')}
-          icon={<FileText className="size-5" />}
         />
         <StatTile
           label="Vencido"
-          hint={overview.data ? `${overview.data.overdueCount} facturas` : undefined}
-          value={money(overview.data?.overdueAmount ?? '0')}
+          value={money(overview.data?.overduePayable ?? '0')}
+          hint={overview.data ? `${number(overview.data.overdueBills)} facturas` : undefined}
           icon={<AlertTriangle className="size-5" />}
-          tone={overview.data && overview.data.overdueCount > 0 ? 'danger' : 'success'}
+          tone={(overview.data?.overdueBills ?? 0) > 0 ? 'danger' : 'success'}
           onClick={() => table.setFilter('effective_status', 'eq', 'OVERDUE')}
+        />
+        <StatTile
+          label="Órdenes abiertas"
+          value={number(overview.data?.openOrders ?? 0)}
+          icon={<FileText className="size-5" />}
+          onClick={() => navigate('/compras/ordenes')}
         />
       </div>
 
@@ -155,14 +145,14 @@ export function InvoicesPage() {
         loading={query.isFetching}
         error={query.error as Error | null}
         onRefresh={() => void query.refetch()}
-        onRowClick={(row) => navigate(`/facturas/${row.id}`)}
+        onRowClick={(row) => navigate(`/compras/facturas/${row.id}`)}
         can={can}
-        searchPlaceholder="Buscar por número, cliente o NIT…"
-        emptyTitle="Todavía no has facturado"
-        emptyDescription="Crea la primera factura o convierte una cotización aceptada."
+        searchPlaceholder="Buscar por número del proveedor o nombre…"
+        emptyTitle="Todavía no hay facturas de proveedor"
+        emptyDescription="Regístralas para llevar las cuentas por pagar y descontar el IVA."
         aggregateLabels={{
           total_amount: { label: 'Total facturado', as: 'money' },
-          outstanding_amount: { label: 'Pendiente de cobro', as: 'money' },
+          outstanding_amount: { label: 'Pendiente de pago', as: 'money' },
           overdue_count: 'Vencidas',
         }}
         filters={
@@ -173,7 +163,7 @@ export function InvoicesPage() {
             aria-label="Filtrar por estado"
           >
             <option value="">Todos los estados</option>
-            {Object.entries(INVOICE_STATUS).map(([value, { label }]) => (
+            {Object.entries(BILL_STATUS).map(([value, { label }]) => (
               <option key={value} value={value}>
                 {label}
               </option>
@@ -181,6 +171,11 @@ export function InvoicesPage() {
           </Select>
         }
       />
+
+      <p className="text-xs text-fg-subtle">
+        Un proveedor no puede tener dos facturas con el mismo número: registrarla dos veces
+        significa pagarla dos veces.
+      </p>
     </>
   );
 }

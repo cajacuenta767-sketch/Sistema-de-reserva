@@ -1,6 +1,15 @@
 import type { ListQuery } from '@erp/contracts';
 import type { Tx } from '../../../../platform/db/unitOfWork.js';
 import type { ScopeFilter } from '../../../../platform/authz/scope.js';
+
+/** Lo que el selector de líneas necesita: los dos precios, para vender y comprar. */
+export interface ProductSearchHit {
+  id: string;
+  sku: string;
+  name: string;
+  sale_price: string;
+  purchase_price: string;
+}
 import type { ListResult } from '../../../../platform/http/list.js';
 import type { Product, ProductVariant } from '../../domain/Product.js';
 import type { Uom } from '../../domain/Uom.js';
@@ -41,7 +50,7 @@ export interface ProductRepository {
     organizationId: string,
     term: string,
     limit: number,
-  ): Promise<Array<{ id: string; sku: string; name: string; sale_price: string }>>;
+  ): Promise<ProductSearchHit[]>;
   overview(tx: Tx, organizationId: string, scope: ScopeFilter): Promise<ProductOverview>;
   /** Datos de varios productos para las líneas de un documento, en una consulta. */
   forDocument(tx: Tx, organizationId: string, ids: readonly string[]): Promise<ProductForDocument[]>;

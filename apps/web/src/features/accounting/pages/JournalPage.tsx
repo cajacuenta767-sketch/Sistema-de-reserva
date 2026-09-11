@@ -140,8 +140,8 @@ export function JournalPage() {
         emptyTitle="Todavía no hay asientos"
         emptyDescription="Los asientos aparecen solos al emitir facturas y registrar cobros."
         aggregateLabels={{
-          debit_sum: 'Total débitos',
-          credit_sum: 'Total créditos',
+          debit_sum: { label: 'Total débitos', as: 'money' },
+          credit_sum: { label: 'Total créditos', as: 'money' },
           drafts: 'Borradores',
         }}
         filters={

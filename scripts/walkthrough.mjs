@@ -283,6 +283,88 @@ await page.waitForSelector('text=Ecuación contable', { timeout: 15000 });
 const general = await page.textContent('body');
 if (general.includes('no se cumple')) throw new Error('la ecuación contable no se cumple');
 
+// ── Compras e inventario ────────────────────────────────────────────────────
+//
+// El recorrido que de verdad importa: pedir, recibir, y comprobar que la
+// mercancía aparece en la bodega con su costo. Una pantalla de inventario que
+// se ve bien pero no refleja lo que llegó no sirve para nada.
+
+console.log('4. Compras e inventario');
+await page.goto(`${WEB}/compras/ordenes/nueva`, { waitUntil: 'networkidle' });
+await shot('60-orden-nueva');
+
+await page.getByLabel('Proveedor').fill('Comercial');
+await page.waitForSelector('button:has-text("Comercial Los Andes")');
+await page.click('button:has-text("Comercial Los Andes")');
+
+await page.getByLabel('Concepto o producto').fill('Gaseosa');
+await page.waitForSelector('button:has-text("Gaseosa cola")');
+await page.click('button:has-text("Gaseosa cola")');
+await page.getByLabel('Cantidad').first().fill('50');
+await shot('61-orden-lineas');
+
+await page.click('button:has-text("Guardar")');
+await page.waitForURL(/\/compras\/ordenes\/[0-9a-f-]{36}$/, { timeout: 15000 });
+await shot('62-orden-ficha');
+
+console.log('→ enviar al proveedor');
+await page.click('button:has-text("Enviar al proveedor")');
+await page.waitForSelector('text=/OC-\\d{5}/', { timeout: 15000 });
+await shot('63-orden-enviada');
+
+console.log('→ recibir mercancía');
+await page.click('button:has-text("Recibir mercancía")');
+await page.waitForSelector('[role=dialog]');
+await shot('64-recepcion');
+await page.click('[role=dialog] button:has-text("Recibir")');
+// La orden pasa a recibida y deja de ofrecer el botón.
+await page.waitForSelector('text=Recibida', { timeout: 15000 });
+await shot('65-orden-recibida');
+
+console.log('→ la mercancía está en la bodega, con su costo');
+await page.goto(`${WEB}/inventario/existencias`, { waitUntil: 'networkidle' });
+await page.waitForSelector('text=Gaseosa cola', { timeout: 15000 });
+await shot('66-existencias');
+
+const existencias = await page.textContent('body');
+if (!existencias.includes('Gaseosa cola')) {
+  throw new Error('la mercancía recibida no aparece en existencias');
+}
+// Llegaron 50 y antes se vendieron 10: quedan 40 al costo de compra de 3.200,
+// o sea 128.000 de valor. Que la venta ya hubiera descontado es justamente lo
+// que se quiere comprobar.
+for (const esperado of ['40', '3.200', '128.000']) {
+  if (!existencias.includes(esperado)) {
+    throw new Error(`las existencias no muestran ${esperado}: el costo no se registró`);
+  }
+}
+// Y el pie de totales no enseña el número en crudo.
+if (/128000\.0+/.test(existencias) || /40\.0{4,}/.test(existencias)) {
+  throw new Error('el pie de la tabla muestra el número sin formatear');
+}
+// Ningún enumerado crudo.
+for (const crudo of ['RECEIPT', 'ISSUE', 'PARTIAL', 'POSTED']) {
+  if (existencias.includes(crudo)) throw new Error(`la pantalla muestra el enumerado crudo ${crudo}`);
+}
+
+console.log('→ el kardex cuenta lo que pasó');
+await page.goto(`${WEB}/inventario/kardex`, { waitUntil: 'networkidle' });
+await page.selectOption('select', { label: 'Gaseosa cola' }).catch(() => undefined);
+await page.waitForTimeout(800);
+await shot('67-kardex');
+
+for (const [name, path] of [
+  ['68-compras-facturas', '/compras/facturas'],
+  ['69-compras-recepciones', '/compras/recepciones'],
+  ['70-por-pagar', '/compras/por-pagar'],
+  ['71-conteos', '/inventario/conteos'],
+  ['72-bodegas', '/inventario/bodegas'],
+]) {
+  console.log(`→ ${path}`);
+  await page.goto(`${WEB}${path}`, { waitUntil: 'networkidle' });
+  await shot(name);
+}
+
 console.log('→ paleta de comandos');
 await page.keyboard.press('Control+k');
 await shot('25-paleta');
@@ -300,6 +382,10 @@ await page.goto(`${WEB}/contabilidad/balance-de-prueba`, { waitUntil: 'networkid
 await shot('50-oscuro-balance');
 await page.goto(`${WEB}/contabilidad/plan-de-cuentas`, { waitUntil: 'networkidle' });
 await shot('51-oscuro-plan-de-cuentas');
+await page.goto(`${WEB}/inventario/existencias`, { waitUntil: 'networkidle' });
+await shot('73-oscuro-existencias');
+await page.goto(`${WEB}/compras/ordenes`, { waitUntil: 'networkidle' });
+await shot('74-oscuro-compras');
 
 console.log('→ móvil 400px');
 await page.setViewportSize({ width: 400, height: 780 });
@@ -342,6 +428,14 @@ for (const path of [
   '/contabilidad/plan-de-cuentas',
   '/contabilidad/periodos',
   '/contabilidad/mayor',
+  '/inventario/existencias',
+  '/inventario/kardex',
+  '/inventario/bodegas',
+  '/inventario/conteos',
+  '/compras/ordenes',
+  '/compras/facturas',
+  '/compras/recepciones',
+  '/compras/por-pagar',
 ]) {
   await assertNoOverflow(path);
 }

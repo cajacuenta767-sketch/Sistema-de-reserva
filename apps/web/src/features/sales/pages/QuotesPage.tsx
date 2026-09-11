@@ -116,7 +116,11 @@ export function QuotesPage() {
         searchPlaceholder="Buscar por número o cliente…"
         emptyTitle="Sin cotizaciones"
         emptyDescription="Prepara una oferta y conviértela en factura cuando la acepten."
-        aggregateLabels={{ total_amount: 'Total cotizado', accepted: 'Aceptadas', converted: 'Facturadas' }}
+        aggregateLabels={{
+          total_amount: { label: 'Total cotizado', as: 'money' },
+          accepted: 'Aceptadas',
+          converted: 'Facturadas',
+        }}
         filters={
           <Select
             value={(table.state.filters.find((f) => f.field === 'status')?.value as string | undefined) ?? ''}
