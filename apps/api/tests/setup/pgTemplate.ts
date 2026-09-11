@@ -54,6 +54,7 @@ const appRole = (): string | null => roleFromUrl(process.env.DATABASE_URL ?? '')
  */
 export const prepareTemplate = async (): Promise<void> => {
   const url = adminUrl(baseUrl(), TEMPLATE_DB);
+  await ensureTemplateExists();
   await resetSchema(url);
   await migrate(url);
   const role = appRole();
@@ -88,6 +89,34 @@ const assertTemplateUsable = async (migrationUrl: string, role: string | null): 
   } finally {
     await client.end();
   }
+};
+
+/**
+ * Crea la base plantilla si no existe.
+ *
+ * `resetSchema` se conecta a ella, así que tiene que existir antes. En una
+ * máquina donde ya se ha trabajado, existe de ejecuciones anteriores y esto no
+ * hace nada; en una limpia —CI, o alguien que acaba de clonar— no existe, y sin
+ * este paso los tests mueren con `database "erp_test_base" does not exist`, un
+ * error que no dice quién debía crearla.
+ */
+const ensureTemplateExists = async (): Promise<void> => {
+  await withAdmin(async (client) => {
+    const { rows } = await client.query<{ exists: boolean }>(
+      'SELECT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1) AS exists',
+      [TEMPLATE_DB],
+    );
+    // El nombre no se puede pasar como parámetro en un CREATE DATABASE, así que
+    // se valida antes: viene de una variable de entorno, no de una petición,
+    // pero un identificador sin comprobar en DDL es una puerta que no se deja
+    // abierta ni en los tests.
+    if (!rows[0]?.exists) {
+      if (!/^[a-z_][a-z0-9_]*$/i.test(TEMPLATE_DB)) {
+        throw new Error(`Nombre de base plantilla inválido: ${TEMPLATE_DB}`);
+      }
+      await client.query(`CREATE DATABASE "${TEMPLATE_DB}"`);
+    }
+  });
 };
 
 const withAdmin = async <T>(fn: (client: pg.Client) => Promise<T>): Promise<T> => {
