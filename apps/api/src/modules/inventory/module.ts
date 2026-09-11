@@ -1,5 +1,5 @@
 import { crudPermissions, definePermission } from '@erp/contracts';
-import { newId } from '@erp/core';
+import { Money, newId } from '@erp/core';
 import { defineModule } from '../../platform/modules/types.js';
 import { onTransactional } from '../../platform/events/EventBus.js';
 import { systemContext } from '../../platform/authz/RequestContext.js';
@@ -96,7 +96,7 @@ export const inventoryModule = defineModule<'inventory', InventoryApi>({
   routes: (ctx, api) =>
     inventoryRoutes(ctx, { warehouses: api.warehouses, stock: api.stock, counts: api.counts }),
 
-  subscriptions(_ctx, api) {
+  subscriptions(ctx, api) {
     return [
       onTransactional('organization.created', 'inventory:seed', async (event, tx) => {
         await api.seedForOrganization(tx, event.organizationId);
@@ -123,8 +123,9 @@ export const inventoryModule = defineModule<'inventory', InventoryApi>({
         if (lines.length === 0) return;
 
         const context = systemContext(event.organizationId);
+        let cost = Money.zero('COP');
         for (const line of lines) {
-          await api.stock.move(context, tx, {
+          const move = await api.stock.move(context, tx, {
             productId: line.productId,
             quantity: `-${line.quantity}`,
             kind: 'ISSUE',
@@ -132,6 +133,84 @@ export const inventoryModule = defineModule<'inventory', InventoryApi>({
             sourceType: 'sales_invoice',
             sourceId: event.aggregateId,
             notes: `Factura ${String(payload.number)}`,
+            allowNegative: true,
+          });
+          cost = cost.plus(Money.fromDb(move.totalCost, 'COP').abs());
+        }
+
+        /*
+         * El costo de lo despachado se anuncia; no se contabiliza aquí.
+         *
+         * Inventario sabe cuánto costó y no sabe a qué cuentas va; contabilidad
+         * sabe lo contrario. Este evento es la frontera: sin él, uno de los dos
+         * módulos tendría que conocer el plan de cuentas del otro.
+         */
+        if (cost.isZero()) return;
+        await ctx.events.publish(tx, {
+          type: 'inventory.cost_recognized',
+          aggregateType: 'sales_invoice',
+          aggregateId: event.aggregateId,
+          organizationId: event.organizationId,
+          payload: {
+            amount: cost.toDb(4),
+            date: String(payload.issueDate),
+            reference: String(payload.number),
+          },
+          actorMembershipId: event.actorMembershipId,
+        });
+      }),
+
+      /** Recibir mercancía la mete en la bodega y fija su costo. */
+      onTransactional('goods_receipt.posted', 'inventory:receive-stock', async (event, tx) => {
+        const payload = event.payload as Record<string, unknown>;
+        const lines = payload.lines as Array<{
+          productId: string;
+          lotId: string | null;
+          quantity: string;
+          unitCost: string;
+          description: string;
+        }>;
+        const context = systemContext(event.organizationId);
+
+        for (const line of lines) {
+          await api.stock.move(context, tx, {
+            productId: line.productId,
+            warehouseId: String(payload.warehouseId),
+            lotId: line.lotId,
+            quantity: line.quantity,
+            unitCost: line.unitCost,
+            kind: 'RECEIPT',
+            moveDate: String(payload.receiptDate),
+            sourceType: 'goods_receipt',
+            sourceId: event.aggregateId,
+            notes: `Recepción ${String(payload.number)}`,
+          });
+        }
+      }),
+
+      /** Anular la recepción devuelve la mercancía al proveedor. */
+      onTransactional('goods_receipt.voided', 'inventory:return-to-supplier', async (event, tx) => {
+        const context = systemContext(event.organizationId);
+        const received = await api.stock.movesForSource(
+          context,
+          tx,
+          'goods_receipt',
+          event.aggregateId,
+        );
+
+        for (const row of received) {
+          // Solo las entradas: las devoluciones de una anulación previa ya
+          // están aquí, y volver a sacarlas dejaría el saldo en negativo.
+          if (row.quantity.startsWith('-')) continue;
+          await api.stock.move(context, tx, {
+            productId: row.productId,
+            warehouseId: row.warehouseId,
+            lotId: row.lotCode ? undefined : null,
+            quantity: `-${row.quantity}`,
+            kind: 'RETURN_OUT',
+            sourceType: 'goods_receipt',
+            sourceId: event.aggregateId,
+            notes: `Anulación de la recepción ${String((event.payload as Record<string, unknown>).number ?? '')}`,
             allowNegative: true,
           });
         }

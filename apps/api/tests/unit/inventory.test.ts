@@ -26,7 +26,7 @@ import {
   deriveOrderStatus,
   pendingOf,
   threeWayMatch,
-} from '../../src/modules/inventory/domain/Purchasing.js';
+} from '../../src/modules/purchasing/domain/Purchasing.js';
 
 const state = (quantity: string, averageCost: string): StockState => ({
   quantity: new Decimal(quantity),

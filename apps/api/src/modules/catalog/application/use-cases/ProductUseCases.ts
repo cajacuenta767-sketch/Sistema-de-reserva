@@ -178,7 +178,18 @@ export class ProductUseCases {
       // Sin impuesto explícito se aplica el IVA general: en Colombia es la
       // situación por defecto, y dejarlo vacío produciría facturas sin IVA.
       saleTaxId: input.saleTaxId ?? (await this.defaultSaleTaxId(tx, ctx.organizationId)),
-      purchaseTaxId: input.purchaseTaxId ?? null,
+      /*
+       * El impuesto de compra también viene por defecto, y es el mismo.
+       *
+       * Un bien gravado al 19 % lo está en los dos sentidos: la empresa lo
+       * cobra al vender y lo paga al comprar. Dejarlo vacío registraba cada
+       * compra sin IVA descontable, lo que sobrevalora el costo y regala el
+       * crédito fiscal —un error que no da ningún aviso y solo aparece al
+       * declarar—. Un producto excluido se configura como tal, que es la
+       * excepción y por eso se declara.
+       */
+      purchaseTaxId:
+        input.purchaseTaxId ?? (await this.defaultSaleTaxId(tx, ctx.organizationId)),
       trackInventory,
       costMethod: input.costMethod ?? 'AVERAGE',
       standardCost: input.standardCost ?? '0',
@@ -492,6 +503,7 @@ export class ProductUseCases {
     return category.id;
   }
 
+  /** El IVA general de la empresa, que aplica a la compra y a la venta. */
   private async defaultSaleTaxId(tx: Tx, organizationId: string): Promise<string | null> {
     const tax = await this.taxes.findByCode(tx, organizationId, DEFAULT_SALE_TAX_CODE);
     return tax?.id ?? null;

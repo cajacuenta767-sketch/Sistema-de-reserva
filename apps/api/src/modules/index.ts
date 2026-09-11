@@ -5,6 +5,7 @@ import { identityModule } from './identity/module.js';
 import { importsModule } from './imports/module.js';
 import { inventoryModule } from './inventory/module.js';
 import { organizationModule } from './organization/module.js';
+import { purchasingModule } from './purchasing/module.js';
 import { salesModule } from './sales/module.js';
 
 /**
@@ -21,6 +22,7 @@ export const modules = [
   salesModule,
   accountingModule,
   inventoryModule,
+  purchasingModule,
   importsModule,
 ] as const;
 

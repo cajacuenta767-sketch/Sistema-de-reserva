@@ -23,7 +23,13 @@ import {
   PgReportRepository,
 } from './infrastructure/persistence/PgEntryRepository.js';
 import { accountingRoutes } from './infrastructure/http/accounting.routes.js';
-import { postCreditNote, postPaymentIn, postSalesInvoice } from './domain/PostingEngine.js';
+import {
+  postCostOfGoods,
+  postCreditNote,
+  postPaymentIn,
+  postPurchaseBill,
+  postSalesInvoice,
+} from './domain/PostingEngine.js';
 import type { JournalType } from './domain/JournalEntry.js';
 
 export interface AccountingApi {
@@ -273,6 +279,85 @@ export const accountingModule = defineModule<'accounting', AccountingApi>({
           api.periods.today(),
           `Anulación del cobro · ${reason}`,
         );
+      }),
+
+      /** La factura del proveedor: aquí las retenciones se PRACTICAN. */
+      onTransactional('bill.posted', 'accounting:post-bill', async (event, tx) => {
+        const p = event.payload as Record<string, unknown>;
+        const context = systemContext(event.organizationId);
+        const date = String(p.issueDate);
+        await api.periods.ensureYearFor(context, tx, date);
+
+        const subtotal = cop(p.subtotal);
+        const draft = postPurchaseBill({
+          number: String(p.number),
+          supplierNumber: String(p.supplierNumber),
+          date,
+          partyId: String(p.partyId),
+          partyName: String(p.partyName ?? 'Proveedor'),
+          currency: String(p.currency ?? 'COP'),
+          exchangeRate: String(p.exchangeRate ?? '1'),
+          // Sin desglose por naturaleza, todo va a compras: el contador lo
+          // reclasifica una vez, que es mejor que inventar un reparto.
+          goodsCost: cop(p.goodsCost ?? '0'),
+          expenseCost: cop(p.expenseCost ?? subtotal.toDb(4)),
+          vat: cop(p.vatTotal),
+          withholdingIncome: cop(p.withholdingIncome ?? '0'),
+          withholdingVat: cop(p.withholdingVat ?? '0'),
+          withholdingIca: cop(p.withholdingIca ?? '0'),
+          total: cop(p.total),
+        });
+
+        await api.posting.post(tx, context, draft, {
+          baseCurrency: 'COP',
+          sourceId: event.aggregateId,
+          actorMembershipId: event.actorMembershipId ?? null,
+        });
+      }),
+
+      onTransactional('bill.voided', 'accounting:reverse-bill', async (event, tx) => {
+        const context = systemContext(event.organizationId);
+        const entry = await api.entries.forSource(context, tx, 'purchase_bill', event.aggregateId);
+        if (!entry || entry.entry.reversedById) return;
+        const reason = String((event.payload as Record<string, unknown>).reason ?? 'Factura anulada');
+        await api.posting.reverse(
+          tx,
+          context,
+          entry.entry,
+          api.periods.today(),
+          `Anulación de la factura de compra · ${reason}`,
+        );
+      }),
+
+      /**
+       * El costo de la mercancía vendida, en su propio asiento.
+       *
+       * Lo anuncia inventario, que es quien sabe cuánto costó; contabilidad
+       * sabe a qué cuentas va. Separarlo del asiento de la factura es lo que
+       * permite leer el margen: uno registra el ingreso y el otro el costo.
+       */
+      onTransactional('inventory.cost_recognized', 'accounting:post-cogs', async (event, tx) => {
+        const p = event.payload as Record<string, unknown>;
+        const context = systemContext(event.organizationId);
+        const date = String(p.date);
+        await api.periods.ensureYearFor(context, tx, date);
+
+        const draft = postCostOfGoods({
+          date,
+          currency: 'COP',
+          exchangeRate: '1',
+          amount: cop(p.amount),
+          reference: String(p.reference),
+          memo: `Costo de la mercancía vendida · ${String(p.reference)}`,
+        });
+
+        await api.posting.post(tx, context, draft, {
+          baseCurrency: 'COP',
+          // El origen es el documento de venta, así que desde la factura se
+          // llega a los DOS asientos: el del ingreso y el del costo.
+          sourceId: null,
+          actorMembershipId: event.actorMembershipId ?? null,
+        });
       }),
 
       onTransactional('credit_note.issued', 'accounting:post-credit-note', async (event, tx) => {

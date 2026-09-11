@@ -282,3 +282,163 @@ export const postCreditNote = (note: CreditNotePosting): EntryDraft => {
   assertBalanced(draft);
   return draft;
 };
+
+export interface BillPosting {
+  number: string;
+  supplierNumber: string;
+  date: string;
+  partyId: string;
+  partyName: string;
+  currency: string;
+  exchangeRate: string;
+  /** Base gravable, ya repartida por su destino contable. */
+  goodsCost: Money;
+  expenseCost: Money;
+  vat: Money;
+  withholdingIncome: Money;
+  withholdingVat: Money;
+  withholdingIca: Money;
+  total: Money;
+}
+
+/**
+ * Factura de proveedor.
+ *
+ *   Inventario / Gasto            base gravable
+ *   IVA descontable               IVA
+ *        a  Proveedores                       total − retenciones
+ *        a  ReteFuente por pagar              retención practicada
+ *        a  ReteIVA por pagar                 reteIVA practicado
+ *        a  ReteICA por pagar                 reteICA practicado
+ *
+ * Aquí las retenciones se PRACTICAN, al revés que en una venta: reducen lo que
+ * se le transfiere al proveedor y se convierten en un PASIVO con la DIAN,
+ * porque ese dinero hay que consignarlo. Tratarlas como menor gasto —el error
+ * simétrico al de ventas— subestimaría el costo y dejaría sin registrar una
+ * obligación tributaria que igual hay que pagar.
+ */
+export const postPurchaseBill = (bill: BillPosting): EntryDraft => {
+  const withheld = bill.withholdingIncome.plus(bill.withholdingVat).plus(bill.withholdingIca);
+  const payable = bill.total.minus(withheld);
+  const ref = bill.supplierNumber;
+
+  const lines: EntryLineDraft[] = [
+    {
+      role: 'INVENTORY',
+      side: 'DEBIT',
+      amount: bill.goodsCost,
+      description: `Mercancía factura ${bill.supplierNumber}`,
+      reference: ref,
+    },
+    {
+      role: 'PURCHASES',
+      side: 'DEBIT',
+      amount: bill.expenseCost,
+      description: `Compras y gastos factura ${bill.supplierNumber}`,
+      reference: ref,
+    },
+    {
+      role: 'VAT_INPUT',
+      side: 'DEBIT',
+      amount: bill.vat,
+      description: `IVA descontable factura ${bill.supplierNumber}`,
+      reference: ref,
+    },
+    {
+      role: 'PAYABLES',
+      side: 'CREDIT',
+      amount: payable,
+      description: `Factura ${bill.supplierNumber} · ${bill.partyName}`,
+      partyId: bill.partyId,
+      reference: ref,
+    },
+    {
+      role: 'WITHHOLDING_INCOME_LIABILITY',
+      side: 'CREDIT',
+      amount: bill.withholdingIncome,
+      description: `Retención en la fuente practicada · ${bill.partyName}`,
+      partyId: bill.partyId,
+      reference: ref,
+    },
+    {
+      role: 'WITHHOLDING_VAT_LIABILITY',
+      side: 'CREDIT',
+      amount: bill.withholdingVat,
+      description: `ReteIVA practicado · ${bill.partyName}`,
+      partyId: bill.partyId,
+      reference: ref,
+    },
+    {
+      role: 'WITHHOLDING_ICA_LIABILITY',
+      side: 'CREDIT',
+      amount: bill.withholdingIca,
+      description: `ReteICA practicado · ${bill.partyName}`,
+      partyId: bill.partyId,
+      reference: ref,
+    },
+  ];
+
+  const draft = withoutZeroLines({
+    journalType: 'PURCHASES',
+    date: bill.date,
+    memo: `Factura de compra ${bill.supplierNumber} · ${bill.partyName}`,
+    sourceType: 'purchase_bill',
+    sourceId: null,
+    currency: bill.currency,
+    exchangeRate: bill.exchangeRate,
+    lines,
+  });
+  assertBalanced(draft);
+  return draft;
+};
+
+export interface CostOfGoodsPosting {
+  date: string;
+  currency: string;
+  exchangeRate: string;
+  amount: Money;
+  reference: string;
+  memo: string;
+}
+
+/**
+ * Costo de la mercancía vendida.
+ *
+ *   Costo de ventas       costo promedio de lo despachado
+ *        a  Inventario                  el mismo importe
+ *
+ * Va en un asiento APARTE del de la factura, en el diario de inventario. La
+ * factura registra el INGRESO y este registra el COSTO: mezclarlos en un solo
+ * asiento haría imposible leer el margen sin descomponerlo a mano, y ata el
+ * costo a un documento que no lo determina —el costo lo fija el inventario, no
+ * el precio de venta—.
+ */
+export const postCostOfGoods = (input: CostOfGoodsPosting): EntryDraft => {
+  const draft = withoutZeroLines({
+    journalType: 'INVENTORY',
+    date: input.date,
+    memo: input.memo,
+    sourceType: 'cost_of_goods',
+    sourceId: null,
+    currency: input.currency,
+    exchangeRate: input.exchangeRate,
+    lines: [
+      {
+        role: 'COST_OF_GOODS',
+        side: 'DEBIT',
+        amount: input.amount,
+        description: input.memo,
+        reference: input.reference,
+      },
+      {
+        role: 'INVENTORY',
+        side: 'CREDIT',
+        amount: input.amount,
+        description: `Salida de inventario · ${input.reference}`,
+        reference: input.reference,
+      },
+    ],
+  });
+  assertBalanced(draft);
+  return draft;
+};
