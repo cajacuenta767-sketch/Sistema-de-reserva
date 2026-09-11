@@ -351,19 +351,23 @@ export class AuthUseCases {
       [user.id],
     );
 
-    // Los permisos viven en tablas con RLS: hay que estar dentro del tenant.
-    const { permissions, roles } = await withTenant(
-      this.pool,
-      { organizationId, membershipId: membership.id, userId: user.id },
-      async (t) => {
-        const { fromRoles, overrides } = await this.roles.effectivePermissions(t, membership.id);
-        const roleList = await this.roles.rolesOf(t, membership.id);
-        return {
-          permissions: PermissionSet.resolve(fromRoles, overrides, user.isSuperAdmin),
-          roles: roleList.map((r) => ({ id: r.id, name: r.name })),
-        };
-      },
-    );
+    // Los permisos viven en tablas con RLS, así que hay que fijar el tenant.
+    //
+    // Sobre la MISMA transacción, no sobre una conexión nueva: durante el
+    // registro, los roles y la membresía todavía no están confirmados y otra
+    // conexión no los vería. Eso devolvía una sesión recién creada con cero
+    // permisos y un menú vacío.
+    //
+    // El orden también importa: la consulta de organizaciones se hace ANTES de
+    // fijar la organización, porque la política de `memberships` solo devuelve
+    // todas las del usuario mientras no haya una organización activa.
+    await tx.client.query('SELECT set_config($1, $2, true)', ['app.organization_id', organizationId]);
+    await tx.client.query('SELECT set_config($1, $2, true)', ['app.membership_id', membership.id]);
+
+    const { fromRoles, overrides } = await this.roles.effectivePermissions(tx, membership.id);
+    const roleList = await this.roles.rolesOf(tx, membership.id);
+    const permissions = PermissionSet.resolve(fromRoles, overrides, user.isSuperAdmin);
+    const roles = roleList.map((r) => ({ id: r.id, name: r.name }));
 
     return {
       user: toPublicUser(user),

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Nexo ERP</title>
+    <!--
+      El tema se aplica ANTES de pintar. Si se hiciera desde React, cada carga en
+      modo oscuro mostraría un destello blanco.
+    -->
+    <script>
+      (() => {
+        try {
+          const stored = localStorage.getItem('erp.theme');
+          const dark =
+            stored === 'dark' ||
+            (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('dark', dark);
+        } catch {
+          /* almacenamiento bloqueado: se queda en claro */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
