@@ -9,6 +9,7 @@ import type { PasswordHasher } from '../../../../platform/security/ScryptPasswor
 import type { PermissionCatalog } from '../../../../platform/authz/catalog.js';
 import type { Mailer } from '../../../../platform/mail/Mailer.js';
 import type { AuditRecorder } from '../../../../platform/audit/AuditRecorder.js';
+import type { EventBus } from '../../../../platform/events/EventBus.js';
 import type { RequestContext } from '../../../../platform/authz/RequestContext.js';
 import { canLogin, toPublicUser, fullName, type Membership, type User } from '../../domain/User.js';
 import { resolveTemplate, SYSTEM_ROLE_TEMPLATES } from '../../domain/roleTemplates.js';
@@ -64,6 +65,7 @@ export class AuthUseCases {
     private readonly catalog: PermissionCatalog,
     private readonly mailer: Mailer,
     private readonly audit: AuditRecorder,
+    private readonly events: EventBus,
     private readonly clock: Clock,
     private readonly organizations: () => OrganizationCreator,
   ) {}
@@ -155,6 +157,20 @@ export class AuthUseCases {
       entityId: org.id,
       entityLabel: org.tradeName,
       after: { legalName: org.legalName, tradeName: org.tradeName, owner: user.email },
+    });
+
+    // Los módulos que necesitan sembrar datos iniciales (unidades de medida,
+    // impuestos, plan de cuentas) escuchan esto. `identity` no los conoce ni
+    // tiene que conocerlos: añadir un módulo con su propia siembra no toca este
+    // fichero. Sus suscriptores transaccionales corren dentro de ESTA
+    // transacción, así que una empresa nunca queda a medio configurar.
+    await this.events.publish(tx, {
+      type: 'organization.created',
+      aggregateType: 'organization',
+      aggregateId: org.id,
+      organizationId: org.id,
+      payload: { legalName: org.legalName, tradeName: org.tradeName, country: 'CO' },
+      actorMembershipId: membership.id,
     });
 
     return org.id;

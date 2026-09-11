@@ -38,6 +38,16 @@ export interface ListSpec {
   fields: Record<string, FieldDef>;
   /** Condiciones siempre presentes, p. ej. `p.deleted_at IS NULL`. */
   baseWhere?: string[];
+  /**
+   * Valores para los `$1…$n` que use `baseWhere`.
+   *
+   * Un listado acotado a un padre (las líneas de una lista de precios, las de
+   * una factura) recibe ese identificador por la URL. Interpolarlo en el SQL
+   * sería la única inyección posible en este constructor, justo después de
+   * haberla cerrado en `sort` y en los filtros. Con esto el valor viaja como
+   * parámetro y los filtros del usuario se numeran a continuación.
+   */
+  baseParams?: readonly unknown[];
   defaultSort?: SortClause[];
   /** Columna que indica el responsable, para el alcance OWN/TEAM. */
   ownerColumn?: string;
@@ -151,7 +161,7 @@ const applyScope = (b: Builder, spec: ListSpec, scope: ScopeFilter): void => {
 };
 
 const buildWhere = (spec: ListSpec, query: ListQuery, scope: ScopeFilter): Builder => {
-  const b: Builder = { where: [...(spec.baseWhere ?? [])], params: [] };
+  const b: Builder = { where: [...(spec.baseWhere ?? [])], params: [...(spec.baseParams ?? [])] };
 
   for (const clause of query.filters) {
     const field = spec.fields[clause.field];

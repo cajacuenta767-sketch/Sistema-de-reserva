@@ -13,14 +13,30 @@ pg_isready >/dev/null 2>&1 || pg_ctlcluster 16 main start
 # .env está en .gitignore, así que en una copia limpia del repo no existe.
 [ -f apps/api/.env ] || cp .env.example apps/api/.env
 
-if [ -f /tmp/claude-0/api.pid ]; then kill "$(cat /tmp/claude-0/api.pid)" 2>/dev/null || true; fi
-sleep 1
+# Se mata por PUERTO, no por PID ni por patrón de línea de comandos.
+#
+# `nohup pnpm exec tsx ... &` deja en `$!` el PID de pnpm, no el del node que
+# realmente escucha: matarlo dejaba vivo al servidor viejo, que seguía
+# respondiendo en el 4000 mientras el nuevo arrancaba al lado. El resultado era
+# una API que decía tener los módulos de hace dos horas y nada explicaba por qué.
+# Por patrón tampoco: `pkill -f tsx` casa también con el shell que lo ejecuta.
+free_port() {
+  local port=$1
+  fuser -k "$port/tcp" >/dev/null 2>&1 || true
+  for _ in $(seq 1 10); do
+    fuser "$port/tcp" >/dev/null 2>&1 || return 0
+    sleep 0.5
+  done
+  echo "El puerto $port sigue ocupado" >&2
+  return 1
+}
+
+free_port 4000
 
 (cd apps/api && pnpm exec tsx src/platform/db/reset.cli.ts)
 
 cd apps/api
 nohup pnpm exec tsx src/bootstrap/main.ts > /tmp/claude-0/api.log 2>&1 &
-echo $! > /tmp/claude-0/api.pid
 
 for _ in $(seq 1 30); do
   if curl -sf localhost:4000/api/v1/health >/dev/null; then

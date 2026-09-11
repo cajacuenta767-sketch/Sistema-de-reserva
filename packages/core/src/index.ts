@@ -2,6 +2,7 @@ export * from './errors/AppError.js';
 export * from './time/Clock.js';
 export * from './time/dates.js';
 export * from './ids/id.js';
+export * from './money/decimal.js';
 export * from './money/currency.js';
 export * from './money/Money.js';
 export * from './tax/TaxLine.js';

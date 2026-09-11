@@ -58,6 +58,7 @@ export const identityModule = defineModule({
       ctx.permissions,
       ctx.mailer,
       ctx.audit,
+      ctx.events,
       ctx.clock,
       // Perezoso a propósito: en `register()` el otro módulo puede no existir aún.
       () => ctx.module<OrganizationCreator>('organization'),

@@ -25,8 +25,41 @@ export interface RoleTemplate {
   excludes?: string[];
 }
 
-export const matchesPattern = (pattern: string, key: string): boolean =>
-  pattern === '*' || pattern === key || (pattern.endsWith('*') && key.startsWith(pattern.slice(0, -1)));
+/**
+ * ¿Casa una clave de permiso con un patrón?
+ *
+ * Las claves son `modulo:recurso:accion`, y el comodín trabaja por segmentos:
+ *
+ *   · `*`                → todo
+ *   · `accounting:*`     → todo el módulo, sea cual sea su profundidad
+ *   · `sales:*:read`     → la lectura de cualquier recurso de ventas
+ *   · `crm:party:read`   → exactamente esa
+ *
+ * La versión anterior solo entendía el comodín al final (`pattern.endsWith('*')`),
+ * así que `sales:*:read` no casaba con NADA: ni exacta ni terminada en `*`. Las
+ * plantillas que lo usaban —Contador y Comercial— concedían en silencio menos
+ * permisos de los que decían, y el error solo se veía al toparse con un 403 que
+ * no tenía explicación.
+ */
+export const matchesPattern = (pattern: string, key: string): boolean => {
+  if (pattern === key) return true;
+
+  const patternParts = pattern.split(':');
+  const keyParts = key.split(':');
+
+  for (let i = 0; i < patternParts.length; i += 1) {
+    const part = patternParts[i];
+    // Un `*` final absorbe el resto de la clave: `accounting:*` incluye tanto
+    // `accounting:journal` como `accounting:journal:post`.
+    if (part === '*' && i === patternParts.length - 1) return keyParts.length > i;
+    if (i >= keyParts.length) return false;
+    if (part !== '*' && part !== keyParts[i]) return false;
+  }
+
+  // Sin comodín final, el patrón tiene que cubrir la clave entera: `sales:*`
+  // (dos segmentos) no debe casar con `sales` a secas ni dejar cola sin revisar.
+  return patternParts.length === keyParts.length;
+};
 
 export const SYSTEM_ROLE_TEMPLATES: readonly RoleTemplate[] = [
   {
