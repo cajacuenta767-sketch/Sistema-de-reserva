@@ -1,5 +1,5 @@
 import type { Tx } from '../db/unitOfWork.js';
-import type { RequestContext } from '../authz/RequestContext.js';
+import { actorMembershipId, type RequestContext } from '../authz/RequestContext.js';
 
 export type AuditAction = 'CREATE' | 'UPDATE' | 'DELETE' | 'POST' | 'VOID' | 'LOGIN' | 'EXPORT';
 
@@ -90,7 +90,7 @@ export class AuditRecorder {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11::jsonb,$12::text[])`,
       [
         ctx.organizationId,
-        ctx.membershipId,
+        actorMembershipId(ctx),
         ctx.user.fullName,
         ctx.ip ?? null,
         ctx.requestId,

@@ -228,6 +228,14 @@ export class PgPaymentRepository implements PaymentRepository {
     return runList<PaymentRow>(tx, paymentSpec(), query, {});
   }
 
+  async partyNameOf(tx: Tx, partyId: string): Promise<string> {
+    const { rows } = await tx.client.query<{ display_name: string }>(
+      'SELECT display_name FROM parties WHERE id = $1',
+      [partyId],
+    );
+    return rows[0]?.display_name ?? 'Cliente';
+  }
+
   async save(tx: Tx, p: Payment): Promise<void> {
     await tx.client.query(
       `INSERT INTO payments (id, organization_id, number, party_id, direction, payment_date, method,

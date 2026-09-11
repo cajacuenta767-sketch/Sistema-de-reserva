@@ -289,8 +289,24 @@ export class InvoiceUseCases {
       after: { estado: 'ISSUED', numero: invoice.number },
     });
 
-    // Contabilidad, facturación electrónica e inventario escuchan esto. Ninguno
-    // de esos módulos es conocido aquí.
+    /*
+     * Contabilidad, facturación electrónica e inventario escuchan esto. Ninguno
+     * de esos módulos es conocido aquí.
+     *
+     * El evento lleva el DESGLOSE, no solo los totales. Un suscriptor que
+     * recibiera `taxTotal` tendría que volver a consultar las líneas para saber
+     * cuánto es IVA y cuánto INC —que van a cuentas distintas— y cuánto se
+     * retuvo de cada clase. Un evento que obliga a reconsultar el agregado del
+     * que salió no es un contrato: es un aviso de que algo pasó.
+     */
+    const breakdown = await this.invoices.accountingBreakdown(tx, id);
+    const withheld = await this.withholdings.listFor(tx, id);
+    const byKind = (kind: string): string =>
+      withheld
+        .filter((w) => w.kind === kind)
+        .reduce((acc, w) => acc.plus(Money.fromDb(w.amount, invoice.currencyCode)), Money.zero(invoice.currencyCode))
+        .toDb(DB_DECIMALS);
+
     await this.events.publish(tx, {
       type: 'invoice.issued',
       aggregateType: 'invoice',
@@ -299,13 +315,23 @@ export class InvoiceUseCases {
       payload: {
         number: invoice.number,
         partyId: invoice.partyId,
+        partyName: breakdown.partyName,
         issueDate: invoice.issueDate,
         dueDate: invoice.dueDate,
         currency: invoice.currencyCode,
+        exchangeRate: invoice.exchangeRate,
         subtotal: invoice.subtotal,
+        goodsRevenue: breakdown.goodsRevenue,
+        servicesRevenue: breakdown.servicesRevenue,
+        vatTotal: breakdown.vat,
+        consumptionTax: breakdown.consumptionTax,
         taxTotal: invoice.taxTotal,
         total: invoice.total,
         withholdingTotal: invoice.withholdingTotal,
+        withholdingIncome: byKind('WITHHOLDING_INCOME'),
+        withholdingVat: byKind('WITHHOLDING_VAT'),
+        withholdingIca: byKind('WITHHOLDING_ICA'),
+        branchId: invoice.branchId,
       },
       actorMembershipId: ctx.membershipId,
     });

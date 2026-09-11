@@ -59,9 +59,14 @@ describe('numeraciones sembradas', () => {
   it('la empresa nace con sus consecutivos configurados', async () => {
     // Sin esto, el primer intento de emitir falla con "no hay numeración
     // configurada" justo cuando alguien intenta cobrar.
+    // Solo las de VENTAS: otros módulos siembran las suyas, y una lista global
+    // convertiría este test en un test de "qué módulos existen hoy", que falla
+    // cada vez que se añade uno sin que ventas tenga nada que ver.
     const rows = await asTenant(t, owner, async (client) => {
       const result = await client.query<{ doc_type: string; prefix: string }>(
-        'SELECT doc_type, prefix FROM document_sequences ORDER BY doc_type',
+        `SELECT doc_type, prefix FROM document_sequences
+          WHERE doc_type IN ('sales_quote', 'sales_invoice', 'credit_note', 'payment_in')
+          ORDER BY doc_type`,
       );
       return result.rows;
     });

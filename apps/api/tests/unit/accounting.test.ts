@@ -19,7 +19,7 @@ import {
   convertToBase,
   entryTotals,
   isBalanced,
-  reverseLines,
+  swapSides,
   roundingTolerance,
   type EntryLineDraft,
 } from '../../src/modules/accounting/domain/JournalEntry.js';
@@ -230,12 +230,12 @@ describe('el asiento cuadra o no existe', () => {
     ).toThrow(/negativo/);
   });
 
-  it('reversar cambia de lado, no de signo', () => {
-    const reversed = reverseLines([line('DEBIT', '100'), line('CREDIT', '100')]);
-    expect(reversed.map((l) => l.side)).toEqual(['CREDIT', 'DEBIT']);
-    expect(reversed.every((l) => !l.amount.isNegative())).toBe(true);
-    // Y el reverso del reverso es el original.
-    expect(reverseLines(reversed).map((l) => l.side)).toEqual(['DEBIT', 'CREDIT']);
+  it('reversar intercambia columnas, no cambia signos', () => {
+    const original = { debit: '100', credit: '0', baseDebit: '100', baseCredit: '0' };
+    const reversed = swapSides(original);
+    expect(reversed).toEqual({ debit: '0', credit: '100', baseDebit: '0', baseCredit: '100' });
+    // Nada queda en negativo, y el reverso del reverso es el original.
+    expect(swapSides(reversed)).toEqual(original);
   });
 });
 

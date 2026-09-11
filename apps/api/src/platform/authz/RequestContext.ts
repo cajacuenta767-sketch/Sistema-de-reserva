@@ -19,6 +19,16 @@ export interface RequestContext {
   branchIds: string[];
   isOwner: boolean;
   isSuperAdmin: boolean;
+  /**
+   * El actor es el sistema, no una persona.
+   *
+   * Importa porque `membershipId` apunta a una fila de `memberships` en varias
+   * claves foráneas (auditoría, quién contabilizó, quién cerró el periodo) y el
+   * sistema no tiene membresía. Sin distinguirlo, cualquier módulo que escriba
+   * desde un suscriptor de eventos viola la clave foránea, y el error sale como
+   * un 409 en la operación del usuario sin nada que lo relacione con la causa.
+   */
+  isSystem?: boolean;
   ip?: string | undefined;
   userAgent?: string | undefined;
 }
@@ -52,4 +62,15 @@ export const systemContext = (organizationId: string, requestId = 'system'): Req
   branchIds: [],
   isOwner: true,
   isSuperAdmin: true,
+  isSystem: true,
 });
+
+/**
+ * Membresía a la que atribuir un cambio, o `null` si lo hizo el sistema.
+ *
+ * Todas las columnas `*_by` con clave foránea a `memberships` pasan por aquí.
+ * El sistema queda identificado por la etiqueta del actor, que es texto libre y
+ * no depende de que exista una fila.
+ */
+export const actorMembershipId = (ctx: RequestContext): string | null =>
+  ctx.isSystem ? null : ctx.membershipId;

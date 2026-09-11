@@ -152,6 +152,15 @@ export interface InvoiceRepository {
   openForParty(tx: Tx, organizationId: string, partyId: string): Promise<Invoice[]>;
   /** Suma lo imputado desde `payment_allocations`: es la única fuente de verdad. */
   recalculatePaid(tx: Tx, invoiceId: string): Promise<string>;
+  /**
+   * Desglose que la contabilidad necesita y el documento no guarda sumado.
+   *
+   * `tax_total` mezcla IVA e INC, que van a cuentas distintas, y el ingreso de
+   * mercancías y el de servicios también. Sin este desglose el asiento cuadra
+   * —los totales son los mismos— pero lleva el IVA y el INC a la misma cuenta,
+   * y la declaración de IVA sale mal sin que nada parezca roto.
+   */
+  accountingBreakdown(tx: Tx, invoiceId: string): Promise<InvoiceBreakdown>;
   aging(tx: Tx, organizationId: string, today: string, scope: ScopeFilter): Promise<AgingRow[]>;
   overview(tx: Tx, organizationId: string, today: string, scope: ScopeFilter): Promise<SalesOverview>;
 }
@@ -188,6 +197,17 @@ export interface LineRepository {
     parent: { quoteId?: string; invoiceId?: string; creditNoteId?: string },
     lines: readonly Omit<StoredLine, 'id'>[],
   ): Promise<void>;
+}
+
+/** Cifras de una factura repartidas por su destino contable. */
+export interface InvoiceBreakdown {
+  /** El tercero, para la glosa del asiento y el auxiliar. */
+  partyName: string;
+  goodsRevenue: string;
+  servicesRevenue: string;
+  vat: string;
+  consumptionTax: string;
+  otherTax: string;
 }
 
 export interface WithholdingRepository {
@@ -235,6 +255,8 @@ export interface PaymentRow extends Record<string, unknown> {
 export interface PaymentRepository {
   findById(tx: Tx, id: string): Promise<Payment | null>;
   list(tx: Tx, query: ListQuery): Promise<ListResult<PaymentRow>>;
+  /** Nombre del tercero, para la glosa del asiento. */
+  partyNameOf(tx: Tx, partyId: string): Promise<string>;
   save(tx: Tx, payment: Payment): Promise<void>;
   update(tx: Tx, payment: Payment): Promise<void>;
   allocations(tx: Tx, paymentId: string): Promise<Array<{ invoiceId: string; number: string | null; amount: string }>>;

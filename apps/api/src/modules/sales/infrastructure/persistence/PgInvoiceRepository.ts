@@ -6,6 +6,7 @@ import { runList, type ListResult, type ListSpec } from '../../../../platform/ht
 import type {
   AgingRow,
   Invoice,
+  InvoiceBreakdown,
   InvoiceRepository,
   InvoiceRow,
   LineRepository,
@@ -236,6 +237,61 @@ export class PgInvoiceRepository implements InvoiceRepository {
       [invoiceId],
     );
     return rows[0]?.paid_total ?? '0';
+  }
+
+  /**
+   * Reparte las cifras de la factura según a qué cuenta contable van.
+   *
+   * Una sola consulta con dos subconsultas, no dos viajes: esto corre DENTRO de
+   * la transacción que emite la factura, y cada consulta de más es latencia que
+   * el usuario espera con el botón pulsado.
+   *
+   * El ingreso se separa por la naturaleza del PRODUCTO, no por la de la línea:
+   * una línea sin producto (un concepto escrito a mano) cuenta como servicio,
+   * que es lo que suele ser. La alternativa —dejarla fuera— descuadraría el
+   * asiento, y meterla toda en mercancías haría que una empresa de servicios
+   * contabilizara todos sus ingresos como venta de mercancías.
+   */
+  async accountingBreakdown(tx: Tx, invoiceId: string): Promise<InvoiceBreakdown> {
+    const { rows } = await tx.client.query<{
+      party_name: string;
+      goods_revenue: string;
+      services_revenue: string;
+      vat: string;
+      consumption_tax: string;
+      other_tax: string;
+    }>(
+      `SELECT pa.display_name AS party_name,
+         coalesce(sum(l.subtotal) FILTER (WHERE p.kind = 'GOOD'), 0)::text AS goods_revenue,
+         coalesce(sum(l.subtotal) FILTER (WHERE p.kind IS DISTINCT FROM 'GOOD'), 0)::text
+           AS services_revenue,
+         coalesce((SELECT sum(t.amount) FROM document_line_taxes t
+                     JOIN document_lines dl ON dl.id = t.line_id
+                    WHERE dl.invoice_id = i.id AND t.kind = 'VAT'), 0)::text AS vat,
+         coalesce((SELECT sum(t.amount) FROM document_line_taxes t
+                     JOIN document_lines dl ON dl.id = t.line_id
+                    WHERE dl.invoice_id = i.id AND t.kind = 'INC'), 0)::text AS consumption_tax,
+         coalesce((SELECT sum(t.amount) FROM document_line_taxes t
+                     JOIN document_lines dl ON dl.id = t.line_id
+                    WHERE dl.invoice_id = i.id AND t.kind NOT IN ('VAT', 'INC')), 0)::text
+           AS other_tax
+       FROM invoices i
+       JOIN parties pa ON pa.id = i.party_id
+       LEFT JOIN document_lines l ON l.invoice_id = i.id
+       LEFT JOIN products p ON p.id = l.product_id
+      WHERE i.id = $1
+      GROUP BY i.id, pa.display_name`,
+      [invoiceId],
+    );
+    const r = rows[0];
+    return {
+      partyName: r?.party_name ?? 'Cliente',
+      goodsRevenue: r?.goods_revenue ?? '0',
+      servicesRevenue: r?.services_revenue ?? '0',
+      vat: r?.vat ?? '0',
+      consumptionTax: r?.consumption_tax ?? '0',
+      otherTax: r?.other_tax ?? '0',
+    };
   }
 
   async aging(tx: Tx, organizationId: string, today: string, scope: ScopeFilter): Promise<AgingRow[]> {

@@ -164,10 +164,16 @@ export class PaymentUseCases {
       payload: {
         number: payment.number,
         partyId: payment.partyId,
+        // La contabilidad necesita el nombre para la glosa y los números de
+        // factura para el auxiliar: sin ellos, el asiento dice "abono a
+        // facturas" y nadie sabe a cuáles.
+        partyName: await this.payments.partyNameOf(tx, input.partyId),
         amount: amount.toDb(),
         currency,
+        method: payment.method,
         applied: allocation.applied.toDb(),
         unapplied: allocation.unapplied.toDb(),
+        invoiceNumbers: allocation.lines.map((l) => l.number).filter((n): n is string => !!n),
         paymentDate,
       },
       actorMembershipId: ctx.membershipId,

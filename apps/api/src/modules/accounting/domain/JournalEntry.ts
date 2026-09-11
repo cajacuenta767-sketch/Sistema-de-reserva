@@ -177,16 +177,27 @@ export const convertToBase = (
 export const roundingTolerance = (lineCount: number, currency: string): Money =>
   Money.of(Math.max(lineCount, 1), currency);
 
+/** Las cuatro columnas de importe de una línea ya escrita. */
+export interface SidedAmounts {
+  debit: string;
+  credit: string;
+  baseDebit: string;
+  baseCredit: string;
+}
+
 /**
- * Invierte un asiento para reversarlo.
+ * Invierte una línea para reversarla.
  *
- * Se cambian los LADOS, no los signos, por lo mismo de siempre: un asiento de
- * reversión tiene que poder leerse en el libro mayor como cualquier otro.
+ * Se intercambian las COLUMNAS, no se cambian los signos. Un asiento de
+ * reversión con importes negativos cuadraría igual y volvería ilegible el libro
+ * mayor: una cuenta con "débitos −500" no se le puede explicar a nadie, y el
+ * balance de prueba, que suma columnas, mostraría cifras que no corresponden a
+ * ningún movimiento real.
  */
-export const reverseLines = (
-  lines: readonly EntryLineDraft[],
-): EntryLineDraft[] =>
-  lines.map((line) => ({
-    ...line,
-    side: line.side === 'DEBIT' ? ('CREDIT' as const) : ('DEBIT' as const),
-  }));
+export const swapSides = <T extends SidedAmounts>(line: T): T => ({
+  ...line,
+  debit: line.credit,
+  credit: line.debit,
+  baseDebit: line.baseCredit,
+  baseCredit: line.baseDebit,
+});
